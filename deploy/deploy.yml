@@ -28,6 +28,7 @@
 
     # --- Backend .env ---
     - name: Escribir backend .env
+      no_log: true
       copy:
         dest: "{{ backend_dir }}/.env"
         mode: "0600"
@@ -56,6 +57,7 @@
 
     # --- MySQL en Docker ---
     - name: Levantar MySQL en Docker
+      no_log: true
       community.docker.docker_container:
         name: "{{ mysql_container }}"
         image: mysql:8.4
@@ -72,7 +74,8 @@
           - carmenmaria_mysql_data:/var/lib/mysql
 
     - name: Esperar a que MySQL acepte conexiones
-      shell: docker exec {{ mysql_container }} mysqladmin ping -h localhost -p{{ mysql_root_password }} --silent
+      no_log: true
+      shell: docker exec -e MYSQL_PWD={{ mysql_root_password }} {{ mysql_container }} mysqladmin ping -h localhost --silent
       register: db_ping
       until: db_ping.rc == 0
       retries: 30
