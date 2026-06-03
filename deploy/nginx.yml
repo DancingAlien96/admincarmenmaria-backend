@@ -1,0 +1,52 @@
+---
+# Configura Nginx (vhost) y emite el certificado HTTPS con Certbot.
+# Requiere que el DNS ya resuelva al servidor.
+# Uso: ansible-playbook -i inventory.ini nginx.yml
+- name: Configurar Nginx + HTTPS
+  hosts: carmenmaria
+  become: true
+  vars_files:
+    - group_vars/all.yml
+
+  tasks:
+    - name: Instalar vhost de Nginx
+      template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/carmenmaria.conf
+      notify: reload nginx
+
+    - name: Habilitar el sitio
+      file:
+        src: /etc/nginx/sites-available/carmenmaria.conf
+        dest: /etc/nginx/sites-enabled/carmenmaria.conf
+        state: link
+      notify: reload nginx
+
+    - name: Quitar el sitio default
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: reload nginx
+
+    - name: Validar configuracion de Nginx
+      command: nginx -t
+      changed_when: false
+
+    - name: Recargar Nginx (aplica HTTP antes del cert)
+      systemd:
+        name: nginx
+        state: reloaded
+
+    - name: Emitir/renovar certificado HTTPS (Certbot)
+      command: >
+        certbot --nginx -d {{ domain }}
+        --non-interactive --agree-tos --redirect
+        -m {{ letsencrypt_email }}
+      args:
+        creates: /etc/letsencrypt/live/{{ domain }}/fullchain.pem
+
+  handlers:
+    - name: reload nginx
+      systemd:
+        name: nginx
+        state: reloaded

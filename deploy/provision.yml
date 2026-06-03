@@ -1,0 +1,113 @@
+---
+# Aprovisionamiento del servidor: instala el software base.
+# Se ejecuta una sola vez (o cuando cambie la infraestructura).
+# Uso: ansible-playbook -i inventory.ini provision.yml
+- name: Aprovisionar servidor Carmen Maria
+  hosts: carmenmaria
+  become: true
+  vars_files:
+    - group_vars/all.yml
+
+  tasks:
+    - name: Actualizar indice de apt
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Instalar paquetes base
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - git
+          - ufw
+          - nginx
+          - python3-pip
+        state: present
+
+    # --- Node.js (NodeSource) ---
+    - name: Agregar repositorio NodeSource (Node {{ node_major }})
+      shell: |
+        curl -fsSL https://deb.nodesource.com/setup_{{ node_major }}.x | bash -
+      args:
+        creates: /etc/apt/sources.list.d/nodesource.list
+
+    - name: Instalar Node.js
+      apt:
+        name: nodejs
+        state: present
+        update_cache: true
+
+    # --- Docker (repositorio oficial) ---
+    - name: Crear directorio de keyrings
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Agregar GPG key de Docker
+      get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+
+    - name: Agregar repositorio de Docker
+      apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable"
+        filename: docker
+        state: present
+
+    - name: Instalar Docker Engine + compose plugin
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Asegurar Docker activo
+      systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    # --- Certbot (HTTPS) ---
+    - name: Instalar Certbot para Nginx
+      apt:
+        name:
+          - certbot
+          - python3-certbot-nginx
+        state: present
+
+    # --- PM2 (gestor de proceso del backend) ---
+    - name: Instalar PM2 global
+      npm:
+        name: pm2
+        global: true
+        state: present
+
+    # --- Firewall ---
+    - name: Permitir OpenSSH en ufw
+      ufw:
+        rule: allow
+        name: OpenSSH
+
+    - name: Permitir Nginx Full (80/443) en ufw
+      ufw:
+        rule: allow
+        name: Nginx Full
+
+    - name: Activar ufw
+      ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+
+    - name: Asegurar Nginx activo
+      systemd:
+        name: nginx
+        enabled: true
+        state: started

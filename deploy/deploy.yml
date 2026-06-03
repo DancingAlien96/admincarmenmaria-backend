@@ -1,0 +1,154 @@
+---
+# Despliegue de la aplicacion: clona/actualiza el codigo, construye y reinicia.
+# Reejecutable para cada cambio (idempotente).
+# Uso: ansible-playbook -i inventory.ini deploy.yml -e @secrets.yml
+- name: Desplegar Carmen Maria
+  hosts: carmenmaria
+  become: true
+  vars_files:
+    - group_vars/all.yml
+
+  tasks:
+    # --- Codigo ---
+    - name: Clonar/actualizar backend
+      git:
+        repo: "{{ backend_repo }}"
+        dest: "{{ backend_dir }}"
+        version: "{{ git_branch }}"
+        force: true
+      register: backend_git
+
+    - name: Clonar/actualizar frontend
+      git:
+        repo: "{{ frontend_repo }}"
+        dest: "{{ frontend_dir }}"
+        version: "{{ git_branch }}"
+        force: true
+      register: frontend_git
+
+    # --- Backend .env ---
+    - name: Escribir backend .env
+      copy:
+        dest: "{{ backend_dir }}/.env"
+        mode: "0600"
+        content: |
+          PORT={{ backend_port }}
+          NODE_ENV=production
+          FRONTEND_URL={{ public_api_url }}
+          DATABASE_URL=mysql://{{ mysql_user }}:{{ mysql_password }}@127.0.0.1:{{ mysql_port }}/{{ mysql_database }}
+          JWT_SECRET={{ jwt_secret }}
+          JWT_EXPIRES_IN=7d
+          ADMIN_EMAIL={{ admin_email }}
+          ADMIN_PASSWORD={{ admin_password }}
+          ADMIN_NAME={{ admin_name }}
+          WOO_URL={{ woo_url }}
+          WOO_CONSUMER_KEY={{ woo_consumer_key }}
+          WOO_CONSUMER_SECRET={{ woo_consumer_secret }}
+          SMTP_HOST={{ smtp_host }}
+          SMTP_PORT={{ smtp_port }}
+          SMTP_USER={{ smtp_user }}
+          SMTP_PASS={{ smtp_pass }}
+          SMTP_FROM={{ smtp_from }}
+          SUPERVISOR_EMAIL={{ supervisor_email }}
+          UPLOAD_DIR=uploads
+          PUBLIC_API_URL={{ public_api_url }}
+          MAX_UPLOAD_MB=15
+
+    # --- MySQL en Docker ---
+    - name: Levantar MySQL en Docker
+      community.docker.docker_container:
+        name: "{{ mysql_container }}"
+        image: mysql:8.4
+        state: started
+        restart_policy: unless-stopped
+        ports:
+          - "127.0.0.1:{{ mysql_port }}:3306"
+        env:
+          MYSQL_ROOT_PASSWORD: "{{ mysql_root_password }}"
+          MYSQL_DATABASE: "{{ mysql_database }}"
+          MYSQL_USER: "{{ mysql_user }}"
+          MYSQL_PASSWORD: "{{ mysql_password }}"
+        volumes:
+          - carmenmaria_mysql_data:/var/lib/mysql
+
+    - name: Esperar a que MySQL acepte conexiones
+      shell: docker exec {{ mysql_container }} mysqladmin ping -h localhost -p{{ mysql_root_password }} --silent
+      register: db_ping
+      until: db_ping.rc == 0
+      retries: 30
+      delay: 3
+      changed_when: false
+
+    # --- Backend build ---
+    - name: Instalar dependencias del backend
+      command: npm ci
+      args:
+        chdir: "{{ backend_dir }}"
+
+    - name: Generar Prisma Client
+      command: npx prisma generate
+      args:
+        chdir: "{{ backend_dir }}"
+
+    - name: Aplicar migraciones de Prisma
+      command: npx prisma migrate deploy
+      args:
+        chdir: "{{ backend_dir }}"
+
+    - name: Compilar backend (TypeScript)
+      command: npm run build
+      args:
+        chdir: "{{ backend_dir }}"
+
+    - name: Sembrar admin inicial (idempotente)
+      command: npm run db:seed
+      args:
+        chdir: "{{ backend_dir }}"
+      register: seed
+      changed_when: false
+      failed_when: false
+
+    - name: Asegurar carpeta de uploads
+      file:
+        path: "{{ uploads_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Iniciar/recargar backend con PM2
+      shell: |
+        cd {{ backend_dir }}
+        pm2 describe carmenmaria-api > /dev/null \
+          && pm2 reload carmenmaria-api --update-env \
+          || pm2 start dist/server.js --name carmenmaria-api
+        pm2 save
+
+    - name: Configurar PM2 al arranque del sistema
+      shell: pm2 startup systemd -u root --hp /root | tail -1 | bash || true
+      changed_when: false
+
+    # --- Frontend build (estatico) ---
+    - name: Instalar dependencias del frontend
+      command: npm ci
+      args:
+        chdir: "{{ frontend_dir }}"
+
+    - name: Compilar frontend (export estatico)
+      command: npx next build
+      args:
+        chdir: "{{ frontend_dir }}"
+      environment:
+        NEXT_PUBLIC_API_URL: "{{ public_api_url }}"
+
+    - name: Crear web root
+      file:
+        path: "{{ web_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Publicar archivos estaticos (out/ -> web root)
+      synchronize:
+        src: "{{ frontend_dir }}/out/"
+        dest: "{{ web_root }}/"
+        delete: true
+        recursive: true
+      delegate_to: "{{ inventory_hostname }}"

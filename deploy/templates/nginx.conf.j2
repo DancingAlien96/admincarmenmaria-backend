@@ -1,0 +1,47 @@
+# Vhost de Carmen Maria. Frontend estatico + API/uploads via proxy al backend.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ domain }};
+
+    # Tamano maximo de subida (coincide con MAX_UPLOAD_MB del backend + margen)
+    client_max_body_size 20M;
+
+    # Frontend: archivos estaticos exportados por Next.js
+    root {{ web_root }};
+    index index.html;
+
+    # API del backend Express
+    location /api/ {
+        proxy_pass http://127.0.0.1:{{ backend_port }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Archivos subidos (servidos por el backend)
+    location /uploads/ {
+        proxy_pass http://127.0.0.1:{{ backend_port }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Healthcheck del backend
+    location = /health {
+        proxy_pass http://127.0.0.1:{{ backend_port }};
+    }
+
+    # SPA estatica de Next (trailingSlash:true => carpetas con index.html).
+    # Intenta archivo exacto, .html, carpeta, y si no, 404 de Next.
+    location / {
+        try_files $uri $uri.html $uri/ /404.html;
+    }
+
+    # Cache de assets de Next
+    location /_next/static/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}

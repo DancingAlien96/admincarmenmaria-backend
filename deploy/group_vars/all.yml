@@ -1,0 +1,28 @@
+---
+# Variables NO secretas del despliegue.
+# Los secretos van en secrets.yml (NO versionado).
+
+domain: admin.enfermeriacarmenmaria.edu.gt
+letsencrypt_email: soporte@piums.io
+
+app_root: /opt/carmenmaria
+backend_dir: "{{ app_root }}/backend"
+frontend_dir: "{{ app_root }}/frontend"
+uploads_dir: "{{ backend_dir }}/uploads"
+web_root: /var/www/carmenmaria   # aqui van los archivos estaticos del frontend (out/)
+
+backend_repo: https://github.com/DancingAlien96/admincarmenmaria-backend.git
+frontend_repo: https://github.com/DancingAlien96/admincarmenmaria-frontend.git
+git_branch: main
+
+node_major: 22
+backend_port: 4000
+
+# Base de datos (MySQL en Docker)
+mysql_database: carmenmaria
+mysql_user: carmenmaria
+mysql_container: carmenmaria-mysql
+mysql_port: 3306
+
+# URL publica de la API (mismo dominio, prefijo /api lo enruta Nginx)
+public_api_url: "https://{{ domain }}"
