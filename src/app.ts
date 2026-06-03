@@ -1,0 +1,50 @@
+import express from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import { env } from "./config/env.js";
+import { errorHandler, notFoundHandler } from "./middleware/error.js";
+import { authRouter } from "./modules/auth/auth.routes.js";
+import { usersRouter } from "./modules/users/users.routes.js";
+import { studentsRouter } from "./modules/students/students.routes.js";
+import { feesRouter } from "./modules/fees/fees.routes.js";
+import { paymentsRouter } from "./modules/payments/payments.routes.js";
+import { expensesRouter } from "./modules/expenses/expenses.routes.js";
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
+import { chargesRouter } from "./modules/charges/charges.routes.js";
+import { graduatesRouter } from "./modules/graduates/graduates.routes.js";
+import { actasRouter } from "./modules/actas/actas.routes.js";
+
+export function createApp() {
+  const app = express();
+
+  app.use(
+    cors({
+      origin: env.FRONTEND_URL,
+      credentials: true,
+    })
+  );
+  app.use(express.json());
+  app.use(cookieParser());
+
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", service: "carmenmaria-backend" });
+  });
+
+  // Rutas de la API
+  app.use("/api/auth", authRouter);
+  app.use("/api/users", usersRouter);
+  app.use("/api/students", studentsRouter);
+  app.use("/api/fees", feesRouter);
+  app.use("/api/payments", paymentsRouter);
+  app.use("/api/expenses", expensesRouter);
+  app.use("/api/dashboard", dashboardRouter);
+  app.use("/api/charges", chargesRouter);
+  app.use("/api/graduates", graduatesRouter);
+  app.use("/api/actas", actasRouter);
+
+  // 404 + manejo de errores (siempre al final)
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+
+  return app;
+}

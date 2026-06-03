@@ -1,0 +1,41 @@
+import type { Request, Response } from "express";
+import * as service from "./dashboard.service.js";
+import { generateDashboardPDF } from "../../lib/dashboard-pdf.js";
+import { generateDashboardExcel } from "../../lib/dashboard-excel.js";
+import type { DashboardQuery } from "./dashboard.schemas.js";
+
+export async function dashboardController(req: Request, res: Response) {
+  const data = await service.getDashboard(
+    req.query as unknown as DashboardQuery
+  );
+  res.json(data);
+}
+
+export async function dashboardReportController(req: Request, res: Response) {
+  const data = await service.getDashboard(
+    req.query as unknown as DashboardQuery
+  );
+  const pdf = await generateDashboardPDF(data);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `inline; filename="reporte-financiero.pdf"`
+  );
+  res.send(pdf);
+}
+
+export async function dashboardExcelController(req: Request, res: Response) {
+  const data = await service.getDashboard(
+    req.query as unknown as DashboardQuery
+  );
+  const xlsx = await generateDashboardExcel(data);
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="reporte-financiero.xlsx"`
+  );
+  res.send(xlsx);
+}

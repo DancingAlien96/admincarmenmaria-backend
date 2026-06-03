@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `Acta` ADD COLUMN `sentAt` DATETIME(3) NULL,
+    ADD COLUMN `sentTo` VARCHAR(191) NULL;

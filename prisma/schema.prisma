@@ -1,0 +1,434 @@
+// Esquema de base de datos - Sistema Administrativo Carmen Maria
+// Cimientos (usuarios/roles/permisos) + Modulo 1 (Expediente del Estudiante)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Usuarios, roles y permisos por seccion
+// ----------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN // Acceso total. Puede crear hasta 5 usuarios y definir sus permisos.
+  STAFF // Personal con permisos por seccion (editor o lector).
+}
+
+enum ModuleSection {
+  STUDENTS // Modulo 1 - Expediente del Estudiante
+  PAYMENTS // Modulo 2 - Control de Pagos
+  REMINDERS // Modulo 3 - Recordatorios Automaticos
+  DASHBOARD // Modulo 4 - Dashboard Financiero
+  DIPLOMAS // Modulo 5 - Banca de Diplomas
+  ACTAS // Modulo 6 - Gestion de Actas
+}
+
+enum PermissionLevel {
+  READER // Solo lectura
+  EDITOR // Lectura y escritura
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(STAFF)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  permissions      UserPermission[]
+  // Auditoria
+  createdStudents  Student[]               @relation("StudentCreatedBy")
+  statusChanges    StudentStatusHistory[]  @relation("StatusChangedBy")
+  uploadedDocs     StudentDocument[]       @relation("DocUploadedBy")
+  registeredPayments Payment[]             @relation("PaymentRegisteredBy")
+  annulledPayments   Payment[]             @relation("PaymentAnnulledBy")
+  registeredExpenses Expense[]             @relation("ExpenseRegisteredBy")
+  createdCharges     Charge[]              @relation("ChargeCreatedBy")
+  annulledCharges    Charge[]              @relation("ChargeAnnulledBy")
+  createdGraduates   Graduate[]            @relation("GraduateCreatedBy")
+  createdActas       Acta[]                @relation("ActaCreatedBy")
+
+  @@index([email])
+}
+
+model UserPermission {
+  id      String          @id @default(cuid())
+  userId  String
+  section ModuleSection
+  level   PermissionLevel @default(READER)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, section])
+  @@index([userId])
+}
+
+// ----------------------------------------------------------------------------
+// Modulo 1 - Expediente del Estudiante
+// ----------------------------------------------------------------------------
+
+enum StudentStatus {
+  INSCRITO // Proceso de ingreso iniciado, pendiente de completar expediente
+  ACTIVO // Cursando, expediente completo y al dia
+  EGRESADO // Curso completado, migrado a banca de diplomas
+  BAJA // Abandono o expulsion, expediente archivado
+}
+
+model Student {
+  id             String        @id @default(cuid())
+  fullName       String
+  dpi            String        @unique // Identificacion oficial, no repetible
+  birthDate      DateTime?
+  // Direccion
+  department     String?
+  municipality   String?
+  address        String?
+  // Contacto
+  phonePrimary   String?
+  phoneAlt       String?
+  email          String?
+  // Estado y trazabilidad
+  status         StudentStatus @default(INSCRITO)
+  enrollmentDate DateTime      @default(now())
+  archived       Boolean       @default(false) // Nunca se elimina, solo se archiva
+  createdById    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  createdBy     User?                  @relation("StudentCreatedBy", fields: [createdById], references: [id])
+  guardians     Guardian[]
+  documents     StudentDocument[]
+  statusHistory StudentStatusHistory[]
+  payments      Payment[]
+  charges       Charge[]
+  graduate      Graduate?
+  actaEntries   ActaEntry[]
+
+  @@index([dpi])
+  @@index([status])
+  @@index([fullName])
+}
+
+// Persona responsable del estudiante (papa, mama, hermano, etc.)
+model Guardian {
+  id           String  @id @default(cuid())
+  studentId    String
+  name         String
+  relationship String? // Parentesco
+  phone        String?
+  email        String?
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+enum DocumentType {
+  DPI
+  PARTIDA_NACIMIENTO
+  FOTOGRAFIA
+  CODIGO_BASICO
+  CERTIFICADO_BASICO
+  DIPLOMA_PREVIO
+  CARTA_RECOMENDACION
+  OTRO
+}
+
+// Documentos digitales: la BD guarda solo la referencia (URL de UploadThing)
+model StudentDocument {
+  id           String       @id @default(cuid())
+  studentId    String
+  type         DocumentType
+  fileName     String
+  fileUrl      String       @db.Text // URL en la nube (UploadThing)
+  fileKey      String? // key de UploadThing para poder borrar el archivo
+  uploadedById String?
+  createdAt    DateTime     @default(now())
+
+  student    Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  uploadedBy User?   @relation("DocUploadedBy", fields: [uploadedById], references: [id])
+
+  @@index([studentId])
+}
+
+// Historial de cambios de estado (cada cambio registra fecha y motivo)
+model StudentStatusHistory {
+  id           String        @id @default(cuid())
+  studentId    String
+  fromStatus   StudentStatus?
+  toStatus     StudentStatus
+  reason       String?       @db.Text
+  changedById  String?
+  createdAt    DateTime      @default(now())
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  changedBy User?   @relation("StatusChangedBy", fields: [changedById], references: [id])
+
+  @@index([studentId])
+}
+
+// ----------------------------------------------------------------------------
+// Modulo 2 - Control de Pagos
+// ----------------------------------------------------------------------------
+
+enum FeeCategory {
+  INSCRIPCION // Pago unico al ingresar
+  MENSUALIDAD // Cobro periodico
+  MATERIALES // Materiales / insumos
+  REPOSICION_DIPLOMA // Reposicion de titulo
+  OTROS // Cobros especiales o imprevistos
+}
+
+// Tipo de cuota configurable por el administrador (monto sin tocar codigo)
+model FeeType {
+  id        String      @id @default(cuid())
+  name      String // "Mensualidad Teoria", "Inscripcion", etc.
+  category  FeeCategory
+  amount    Decimal     @db.Decimal(10, 2) // monto por defecto
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  payments Payment[]
+  charges  Charge[]
+
+  @@index([active])
+}
+
+enum PaymentMethod {
+  EFECTIVO
+  TRANSFERENCIA
+  DEPOSITO
+  TARJETA // normalmente via WooCommerce / Tilopay
+}
+
+enum PaymentSource {
+  MANUAL // registrado por el personal
+  WOOCOMMERCE // sincronizado desde la tienda
+}
+
+enum PaymentStatus {
+  ACTIVO
+  ANULADO // no se elimina; se anula con trazabilidad
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  // Vinculo con el estudiante (puede faltar en pagos de Woo aun sin vincular)
+  studentId String?
+  feeTypeId String?
+  // Cargo (cuota asignada) que este pago cubre, si aplica
+  chargeId  String?
+  concept   String // descripcion del cobro
+  amount    Decimal       @db.Decimal(10, 2)
+  discount  Decimal       @default(0) @db.Decimal(10, 2) // beca / descuento aplicado
+  method    PaymentMethod
+  source    PaymentSource @default(MANUAL)
+  status    PaymentStatus @default(ACTIVO)
+  paidAt    DateTime      @default(now())
+
+  // Comprobante escaneado / fotografiado (UploadThing)
+  receiptUrl String? @db.Text
+  receiptKey String?
+
+  // Datos de WooCommerce (la tienda no tiene DPI; se vincula por correo/nombre)
+  wooOrderId Int?    @unique
+  payerName  String?
+  payerEmail String?
+
+  // Trazabilidad
+  registeredById String?
+  annulledAt     DateTime?
+  annulledById   String?
+  annulReason    String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student      Student? @relation(fields: [studentId], references: [id])
+  feeType      FeeType? @relation(fields: [feeTypeId], references: [id])
+  charge       Charge?  @relation(fields: [chargeId], references: [id])
+  registeredBy User?    @relation("PaymentRegisteredBy", fields: [registeredById], references: [id])
+  annulledBy   User?    @relation("PaymentAnnulledBy", fields: [annulledById], references: [id])
+
+  @@index([studentId])
+  @@index([status])
+  @@index([source])
+  @@index([paidAt])
+  @@index([chargeId])
+}
+
+// ----------------------------------------------------------------------------
+// Cuotas asignadas (cargos) - lo que cada estudiante DEBE pagar.
+// Base para mora e "ingreso esperado" del dashboard.
+// ----------------------------------------------------------------------------
+
+enum ChargeStatus {
+  PENDIENTE // Aun sin pagar (o pago parcial)
+  PAGADO // Cubierto en su totalidad
+  ANULADO // Cancelado, no cuenta para mora
+}
+
+model Charge {
+  id        String       @id @default(cuid())
+  studentId String
+  feeTypeId String?
+  concept   String
+  amount    Decimal      @db.Decimal(10, 2)
+  dueDate   DateTime // fecha de vencimiento
+  status    ChargeStatus @default(PENDIENTE)
+
+  // Trazabilidad
+  createdById  String?
+  annulledAt   DateTime?
+  annulledById String?
+  annulReason  String?   @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeType   FeeType?  @relation(fields: [feeTypeId], references: [id])
+  createdBy User?     @relation("ChargeCreatedBy", fields: [createdById], references: [id])
+  annulledBy User?    @relation("ChargeAnnulledBy", fields: [annulledById], references: [id])
+  payments  Payment[]
+
+  @@index([studentId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+// ----------------------------------------------------------------------------
+// Modulo 5 - Banca de Diplomas (Egresados)
+// Repositorio digital de diplomas. Se crea al migrar un estudiante a EGRESADO.
+// ----------------------------------------------------------------------------
+
+model Graduate {
+  id            String   @id @default(cuid())
+  // Vinculo opcional al expediente de origen (1 a 1). Puede ser null si se
+  // registra un egresado historico sin expediente en el sistema.
+  studentId     String?  @unique
+  fullName      String
+  dpi           String   @unique // Identificacion oficial
+  email         String?
+  phone         String?
+  mspasCode     String? // Codigo de MSPAS del egresado
+  diplomaNumber String   @unique // Correlativo unico e irrepetible
+  graduationDate DateTime
+  // Archivo del diploma escaneado (UploadThing): solo guardamos la referencia
+  diplomaUrl    String?  @db.Text
+  diplomaKey    String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student   Student? @relation(fields: [studentId], references: [id])
+  createdBy User?    @relation("GraduateCreatedBy", fields: [createdById], references: [id])
+  letters   RecommendationLetter[]
+
+  @@index([fullName])
+  @@index([dpi])
+  @@index([diplomaNumber])
+}
+
+// Cartas de recomendacion emitidas (varia fecha/nombre/DPI + firma digital).
+// Guardamos cada emision para trazabilidad.
+model RecommendationLetter {
+  id          String   @id @default(cuid())
+  graduateId  String
+  issueDate   DateTime
+  // Texto/notas opcionales especificas de esta carta
+  notes       String?  @db.Text
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  graduate Graduate @relation(fields: [graduateId], references: [id], onDelete: Cascade)
+
+  @@index([graduateId])
+}
+
+// ----------------------------------------------------------------------------
+// Modulo 6 - Gestion de Actas de calificaciones
+// Acta grupal: lista a los estudiantes de una fase con sus punteos.
+// ----------------------------------------------------------------------------
+
+model Acta {
+  id        String   @id @default(cuid())
+  actaNumber String  // No. de acta (lo define el admin)
+  folios    String?  // No. de folios correspondiente
+  phase     String   // Fase del programa (ej. "Evaluacion Final Fase I")
+  actaDate  DateTime // Fecha que se realizo el acta
+  notes     String?  @db.Text
+
+  // Trazabilidad del envio a la supervisora
+  sentAt    DateTime?
+  sentTo    String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User?       @relation("ActaCreatedBy", fields: [createdById], references: [id])
+  entries   ActaEntry[]
+
+  @@index([actaDate])
+}
+
+// Un renglon del acta: estudiante + punteo. Se guarda el nombre por si el
+// expediente cambia luego (el acta es un documento historico).
+model ActaEntry {
+  id        String  @id @default(cuid())
+  actaId    String
+  studentId String?
+  studentName String // nombre tal cual aparecio en el acta
+  score     Decimal @db.Decimal(5, 2) // punteo 0-100
+
+  acta    Acta     @relation(fields: [actaId], references: [id], onDelete: Cascade)
+  student Student? @relation(fields: [studentId], references: [id])
+
+  @@index([actaId])
+}
+
+// ----------------------------------------------------------------------------
+// Modulo 4 - Dashboard Financiero (Egresos)
+// Los ingresos provienen del modelo Payment. Aqui solo los egresos/gastos.
+// ----------------------------------------------------------------------------
+
+enum ExpenseCategory {
+  SALARIOS // Salarios y honorarios del personal
+  INSUMOS // Insumos y materiales educativos
+  SERVICIOS // Agua, electricidad, internet
+  MANTENIMIENTO // Mantenimiento de instalaciones
+  ADMINISTRATIVOS // Gastos administrativos y papeleria
+  IMPREVISTOS // Imprevistos
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  category    ExpenseCategory
+  concept     String
+  amount      Decimal         @db.Decimal(10, 2)
+  spentAt     DateTime        @default(now())
+  // Comprobante opcional (UploadThing)
+  receiptUrl  String?         @db.Text
+  receiptKey  String?
+  notes       String?         @db.Text
+
+  registeredById String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  registeredBy User? @relation("ExpenseRegisteredBy", fields: [registeredById], references: [id])
+
+  @@index([category])
+  @@index([spentAt])
+}

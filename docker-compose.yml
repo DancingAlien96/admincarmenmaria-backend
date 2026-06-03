@@ -1,0 +1,22 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: carmenmaria-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-carmenmaria}
+      MYSQL_USER: ${MYSQL_USER:-carmenmaria}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-carmenmaria}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - carmenmaria_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  carmenmaria_mysql_data:
