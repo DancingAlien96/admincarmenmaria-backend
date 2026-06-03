@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { badRequest, notFound } from "../../lib/http-error.js";
+import { deleteFile } from "../../lib/storage.js";
 import type {
   CreateGraduateInput,
   UpdateGraduateInput,
@@ -119,6 +120,15 @@ export async function createGraduate(
 export async function updateGraduate(id: string, input: UpdateGraduateInput) {
   const existing = await prisma.graduate.findUnique({ where: { id } });
   if (!existing) throw notFound("Egresado no encontrado");
+
+  // Si llega un diploma nuevo y ya habia uno distinto, borra el archivo viejo.
+  if (
+    input.diplomaKey !== undefined &&
+    existing.diplomaKey &&
+    existing.diplomaKey !== input.diplomaKey
+  ) {
+    await deleteFile(existing.diplomaKey);
+  }
 
   return prisma.graduate.update({
     where: { id },

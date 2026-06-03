@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { notFound } from "../../lib/http-error.js";
+import { deleteFile } from "../../lib/storage.js";
 import type {
   CreateExpenseInput,
   UpdateExpenseInput,
@@ -97,5 +98,7 @@ export async function deleteExpense(id: string) {
   const existing = await prisma.expense.findUnique({ where: { id } });
   if (!existing) throw notFound("Egreso no encontrado");
   await prisma.expense.delete({ where: { id } });
+  // Borra el comprobante adjunto del disco, si lo hubiera.
+  await deleteFile(existing.receiptKey);
   return { ok: true };
 }

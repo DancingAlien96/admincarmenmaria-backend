@@ -25,6 +25,12 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
   SUPERVISOR_EMAIL: z.string().optional(),
+  // Almacenamiento de archivos en disco
+  UPLOAD_DIR: z.string().default("uploads"),
+  // URL publica base para construir los enlaces de archivos (ej. https://admin.../api)
+  PUBLIC_API_URL: z.string().default("http://localhost:4000"),
+  // Tamano maximo de subida en MB
+  MAX_UPLOAD_MB: z.coerce.number().default(15),
 });
 
 const parsed = envSchema.safeParse(process.env);

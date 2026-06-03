@@ -2,7 +2,9 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { env } from "./config/env.js";
+import { UPLOAD_ROOT, ensureUploadDir } from "./lib/storage.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
+import { uploadsRouter } from "./modules/uploads/uploads.routes.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { usersRouter } from "./modules/users/users.routes.js";
 import { studentsRouter } from "./modules/students/students.routes.js";
@@ -26,6 +28,19 @@ export function createApp() {
   app.use(express.json());
   app.use(cookieParser());
 
+  // Crea la carpeta de subidas al arrancar.
+  void ensureUploadDir();
+
+  // Sirve los archivos subidos de forma estatica (descarga/visualizacion).
+  app.use(
+    "/uploads",
+    express.static(UPLOAD_ROOT, {
+      maxAge: "7d",
+      // Evita ejecutar nada; solo servir como adjunto/inline seguro.
+      setHeaders: (res) => res.setHeader("X-Content-Type-Options", "nosniff"),
+    })
+  );
+
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", service: "carmenmaria-backend" });
   });
@@ -41,6 +56,7 @@ export function createApp() {
   app.use("/api/charges", chargesRouter);
   app.use("/api/graduates", graduatesRouter);
   app.use("/api/actas", actasRouter);
+  app.use("/api/uploads", uploadsRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);

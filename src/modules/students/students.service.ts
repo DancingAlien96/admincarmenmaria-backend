@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { notFound } from "../../lib/http-error.js";
+import { deleteFile } from "../../lib/storage.js";
 import { migrateStudentToGraduate } from "../graduates/graduates.service.js";
 import type {
   CreateStudentInput,
@@ -220,5 +221,7 @@ export async function deleteDocument(studentId: string, docId: string) {
   });
   if (!doc) throw notFound("Documento no encontrado");
   await prisma.studentDocument.delete({ where: { id: docId } });
-  return { ok: true, fileKey: doc.fileKey };
+  // Borra el archivo fisico del disco (no falla si ya no existe).
+  await deleteFile(doc.fileKey);
+  return { ok: true };
 }
