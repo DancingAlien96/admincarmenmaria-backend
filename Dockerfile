@@ -29,10 +29,8 @@ RUN npm ci --omit=dev
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 COPY prisma ./prisma
-# Codigo compilado
+# Codigo compilado (incluye dist/seed.js)
 COPY --from=build /app/dist ./dist
-# tsx para ejecutar el seed (escrito en TS)
-COPY --from=build /app/node_modules/tsx ./node_modules/tsx
 
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh

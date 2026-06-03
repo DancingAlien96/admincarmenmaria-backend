@@ -6,7 +6,7 @@ echo "[entrypoint] Aplicando migraciones de Prisma..."
 npx prisma migrate deploy
 
 echo "[entrypoint] Sembrando admin inicial (si no existe)..."
-node_modules/.bin/tsx prisma/seed.ts || echo "[entrypoint] seed omitido o ya existe"
+node dist/seed.js || echo "[entrypoint] seed omitido"
 
 echo "[entrypoint] Iniciando API..."
 exec "$@"

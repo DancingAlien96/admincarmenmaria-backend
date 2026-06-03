@@ -1,3 +1,5 @@
+// Seed del admin inicial. Se compila a dist/seed.js y lo ejecuta el
+// docker-entrypoint con `node` (sin depender de tsx en runtime).
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
@@ -11,6 +13,7 @@ async function main() {
   const password = process.env.ADMIN_PASSWORD;
   const name = process.env.ADMIN_NAME ?? "Administrador";
 
+  // Sin contrasena definida NO se crea admin (evita un default debil y publico).
   if (!password || password.length < 8) {
     console.error(
       "✖ ADMIN_PASSWORD no definida o muy corta. No se crea el administrador."
@@ -29,10 +32,7 @@ async function main() {
     data: { name, email, passwordHash, role: "ADMIN", active: true },
   });
 
-  console.log("✔ Administrador creado:");
-  console.log(`   Email: ${email}`);
-  console.log(`   Contrasena: ${password}`);
-  console.log("   (Cambiala despues del primer inicio de sesion)");
+  console.log(`✔ Administrador creado: ${email}`);
 }
 
 main()
