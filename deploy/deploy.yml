@@ -65,6 +65,13 @@
       retries: 30
       delay: 4
 
+    # Cron: sincroniza WooCommerce cada hora ejecutando el CLI dentro del contenedor.
+    - name: Programar sincronizacion horaria de WooCommerce
+      cron:
+        name: "sync-woocommerce"
+        minute: "0"
+        job: "docker exec carmenmaria-backend node dist/cli/sync-woo.js >> /var/log/carmenmaria-sync.log 2>&1"
+
     # --- Frontend estatico ---
     - name: Instalar dependencias del frontend
       command: npm ci
