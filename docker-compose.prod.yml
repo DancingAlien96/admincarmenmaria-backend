@@ -1,0 +1,68 @@
+# Produccion: base de datos + backend, ambos en contenedores.
+# Nginx (en el host) sirve el frontend estatico y hace proxy a backend:4000.
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: carmenmaria-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: carmenmaria-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      FRONTEND_URL: ${PUBLIC_API_URL}
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 7d
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ADMIN_NAME: ${ADMIN_NAME}
+      WOO_URL: ${WOO_URL}
+      WOO_CONSUMER_KEY: ${WOO_CONSUMER_KEY}
+      WOO_CONSUMER_SECRET: ${WOO_CONSUMER_SECRET}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      SMTP_FROM: ${SMTP_FROM}
+      SUPERVISOR_EMAIL: ${SUPERVISOR_EMAIL}
+      UPLOAD_DIR: uploads
+      PUBLIC_API_URL: ${PUBLIC_API_URL}
+      MAX_UPLOAD_MB: 15
+    # Los archivos subidos persisten en un volumen, fuera del contenedor.
+    volumes:
+      - uploads_data:/app/uploads
+    # Solo accesible desde el host (Nginx hace de proxy). No expuesto a Internet.
+    ports:
+      - "127.0.0.1:4000:4000"
+    networks:
+      - internal
+
+volumes:
+  mysql_data:
+  uploads_data:
+
+networks:
+  internal:
