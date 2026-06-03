@@ -2,4 +2,5 @@ node_modules/
 dist/
 .env
 *.log
-uploads/
+# Solo la carpeta de archivos subidos en la raiz, NO src/modules/uploads/
+/uploads/
