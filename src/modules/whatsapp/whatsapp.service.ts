@@ -1,6 +1,11 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
-import { sendText, toE164, isYcloudConfigured } from "../../lib/ycloud.js";
+import {
+  sendText,
+  sendTemplate,
+  toE164,
+  isYcloudConfigured,
+} from "../../lib/ycloud.js";
 import {
   generateBotReply,
   isOpenAiConfigured,
@@ -132,6 +137,52 @@ export async function sendAndLog(
       direction: "OUTBOUND",
       phone,
       body,
+      status: "FAILED",
+      kind,
+      error: msg,
+    });
+    return { ok: false, error: msg };
+  }
+}
+
+// Envia un mensaje de PLANTILLA (para notificaciones fuera de la ventana 24h)
+// y lo registra. `preview` es el texto renderizado que guardamos en el log.
+export async function sendTemplateAndLog(
+  phone: string,
+  templateName: string,
+  languageCode: string,
+  variables: string[],
+  kind: string,
+  preview: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isYcloudConfigured()) {
+    await logMessage({
+      direction: "OUTBOUND",
+      phone,
+      body: preview,
+      status: "FAILED",
+      kind,
+      error: "YCloud no configurado",
+    });
+    return { ok: false, error: "WhatsApp (YCloud) no esta configurado." };
+  }
+  try {
+    const res = await sendTemplate(phone, templateName, languageCode, variables);
+    await logMessage({
+      direction: "OUTBOUND",
+      phone,
+      body: preview,
+      status: "SENT",
+      kind,
+      wamid: res.wamid,
+    });
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error al enviar";
+    await logMessage({
+      direction: "OUTBOUND",
+      phone,
+      body: preview,
       status: "FAILED",
       kind,
       error: msg,

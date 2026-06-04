@@ -74,3 +74,12 @@ export async function sendController(req: Request, res: Response) {
   if (!result.ok) throw badRequest(result.error ?? "No se pudo enviar");
   res.json({ ok: true });
 }
+
+// Envio masivo por plantilla a estudiantes (todos los activos si no se listan).
+export async function bulkController(req: Request, res: Response) {
+  const { templateName, studentIds } = req.body ?? {};
+  if (!templateName) throw badRequest("templateName es requerido");
+  const { sendBulk } = await import("./notifications.service.js");
+  const result = await sendBulk({ templateName, studentIds });
+  res.json(result);
+}
