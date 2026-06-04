@@ -49,6 +49,11 @@
           SMTP_PASS={{ smtp_pass }}
           SMTP_FROM={{ smtp_from }}
           SUPERVISOR_EMAIL={{ supervisor_email }}
+          YCLOUD_API_KEY={{ ycloud_api_key | default('') }}
+          YCLOUD_FROM={{ ycloud_from | default('') }}
+          YCLOUD_WEBHOOK_SECRET={{ ycloud_webhook_secret | default('') }}
+          OPENAI_API_KEY={{ openai_api_key | default('') }}
+          OPENAI_MODEL={{ openai_model | default('gpt-4o-mini') }}
 
     # --- Contenedores: build + up (migraciones y seed corren en el entrypoint) ---
     - name: Build y levantar contenedores (mysql + backend)

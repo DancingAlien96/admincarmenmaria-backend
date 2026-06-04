@@ -51,6 +51,11 @@ services:
       UPLOAD_DIR: uploads
       PUBLIC_API_URL: ${PUBLIC_API_URL}
       MAX_UPLOAD_MB: 15
+      YCLOUD_API_KEY: ${YCLOUD_API_KEY}
+      YCLOUD_FROM: ${YCLOUD_FROM}
+      YCLOUD_WEBHOOK_SECRET: ${YCLOUD_WEBHOOK_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL}
     # Los archivos subidos persisten en un volumen, fuera del contenedor.
     volumes:
       - uploads_data:/app/uploads
