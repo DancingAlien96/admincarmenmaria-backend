@@ -7,16 +7,13 @@ import { badRequest } from "../../lib/http-error.js";
 // Valida la firma HMAC usando el raw body.
 export async function webhookController(req: Request, res: Response) {
   const raw = (req as Request & { rawBody?: string }).rawBody ?? "";
-  const timestamp =
-    (req.headers["x-ycloud-timestamp"] as string) ||
-    (req.headers["ycloud-timestamp"] as string) ||
-    "";
-  const signature =
-    (req.headers["x-ycloud-signature"] as string) ||
+  // YCloud envia un unico header "YCloud-Signature: t=...,s=..."
+  const signatureHeader =
     (req.headers["ycloud-signature"] as string) ||
+    (req.headers["x-ycloud-signature"] as string) ||
     "";
 
-  if (!verifyWebhookSignature(raw, timestamp, signature)) {
+  if (!verifyWebhookSignature(raw, signatureHeader)) {
     return res.status(401).json({ error: "Firma invalida" });
   }
 

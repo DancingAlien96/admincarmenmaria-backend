@@ -83,13 +83,13 @@ export async function sendTemplate(
 }
 
 // Valida la firma HMAC-SHA256 del webhook de YCloud.
-// Firma sobre `{timestamp}.{rawBody}`.
+// YCloud envia UN header "YCloud-Signature: t={unixSeconds},s={hexSig}"
+// y firma el payload `{timestamp}.{rawBody}.` (con punto final).
 const REPLAY_WINDOW_MS = 5 * 60 * 1000; // +/- 5 minutos
 
 export function verifyWebhookSignature(
   rawBody: string,
-  timestamp: string,
-  signature: string
+  signatureHeader: string
 ): boolean {
   // Sin secreto: en produccion se rechaza (fail-closed); en dev se permite.
   if (!env.YCLOUD_WEBHOOK_SECRET) {
@@ -102,25 +102,30 @@ export function verifyWebhookSignature(
     return true;
   }
 
-  // Cabeceras obligatorias
+  if (!signatureHeader) return false;
+
+  // Parsea "t=...,s=..." (el orden puede variar).
+  let timestamp = "";
+  let signature = "";
+  for (const part of signatureHeader.split(",")) {
+    const [k, v] = part.split("=");
+    if (k?.trim() === "t") timestamp = (v ?? "").trim();
+    if (k?.trim() === "s") signature = (v ?? "").trim();
+  }
   if (!timestamp || !signature) return false;
 
-  // Anti-replay: el timestamp debe ser reciente. Acepta epoch (s o ms) o ISO.
-  const ts = /^\d+$/.test(timestamp)
-    ? Number(timestamp) < 1e12
-      ? Number(timestamp) * 1000 // segundos -> ms
-      : Number(timestamp)
-    : Date.parse(timestamp);
-  if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > REPLAY_WINDOW_MS) {
+  // Anti-replay: timestamp en segundos Unix, debe ser reciente.
+  const tsMs = Number(timestamp) * 1000;
+  if (!Number.isFinite(tsMs) || Math.abs(Date.now() - tsMs) > REPLAY_WINDOW_MS) {
     return false;
   }
 
-  const signed = `${timestamp}.${rawBody}`;
+  // OJO: YCloud firma con un punto al final del cuerpo.
+  const signed = `${timestamp}.${rawBody}.`;
   const expected = crypto
     .createHmac("sha256", env.YCLOUD_WEBHOOK_SECRET)
     .update(signed)
     .digest("hex");
-  // Comparacion en tiempo constante
   try {
     return crypto.timingSafeEqual(
       Buffer.from(expected),
