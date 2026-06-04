@@ -15,6 +15,10 @@ import { dashboardRouter } from "./modules/dashboard/dashboard.routes.js";
 import { chargesRouter } from "./modules/charges/charges.routes.js";
 import { graduatesRouter } from "./modules/graduates/graduates.routes.js";
 import { actasRouter } from "./modules/actas/actas.routes.js";
+import {
+  whatsappRouter,
+  whatsappWebhookRouter,
+} from "./modules/whatsapp/whatsapp.routes.js";
 
 export function createApp() {
   const app = express();
@@ -25,7 +29,15 @@ export function createApp() {
       credentials: true,
     })
   );
-  app.use(express.json());
+  // Guarda el raw body (necesario para validar la firma del webhook de YCloud).
+  app.use(
+    express.json({
+      verify: (req, _res, buf) => {
+        (req as express.Request & { rawBody?: string }).rawBody =
+          buf.toString("utf8");
+      },
+    })
+  );
   app.use(cookieParser());
 
   // Crea la carpeta de subidas al arrancar.
@@ -57,6 +69,9 @@ export function createApp() {
   app.use("/api/graduates", graduatesRouter);
   app.use("/api/actas", actasRouter);
   app.use("/api/uploads", uploadsRouter);
+  // El webhook va ANTES del router autenticado: es publico (validado por firma).
+  app.use("/api/whatsapp/webhook", whatsappWebhookRouter);
+  app.use("/api/whatsapp", whatsappRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);

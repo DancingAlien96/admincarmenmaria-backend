@@ -31,6 +31,13 @@ const envSchema = z.object({
   PUBLIC_API_URL: z.string().default("http://localhost:4000"),
   // Tamano maximo de subida en MB
   MAX_UPLOAD_MB: z.coerce.number().default(15),
+  // --- WhatsApp (YCloud) ---
+  YCLOUD_API_KEY: z.string().optional(),
+  YCLOUD_FROM: z.string().optional(), // numero WhatsApp Business en E.164
+  YCLOUD_WEBHOOK_SECRET: z.string().optional(), // para validar firma del webhook
+  // --- IA (OpenAI) para el bot ---
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default("gpt-4o-mini"),
 });
 
 const parsed = envSchema.safeParse(process.env);

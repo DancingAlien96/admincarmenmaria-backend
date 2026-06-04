@@ -72,6 +72,13 @@
         minute: "0"
         job: "docker exec carmenmaria-backend node dist/cli/sync-woo.js >> /var/log/carmenmaria-sync.log 2>&1"
 
+    - name: Programar recordatorios de pago (diario 9am)
+      cron:
+        name: "whatsapp-reminders"
+        minute: "0"
+        hour: "9"
+        job: "docker exec carmenmaria-backend node dist/cli/send-reminders.js >> /var/log/carmenmaria-reminders.log 2>&1"
+
     # --- Frontend estatico ---
     - name: Instalar dependencias del frontend
       command: npm ci

@@ -111,6 +111,7 @@ model Student {
   charges       Charge[]
   graduate      Graduate?
   actaEntries   ActaEntry[]
+  whatsappMessages WhatsappMessage[]
 
   @@index([dpi])
   @@index([status])
@@ -431,4 +432,53 @@ model Expense {
 
   @@index([category])
   @@index([spentAt])
+}
+
+// ----------------------------------------------------------------------------
+// Modulo 3 - WhatsApp (bot de dudas + notificaciones) via YCloud
+// ----------------------------------------------------------------------------
+
+enum WaDirection {
+  INBOUND // mensaje que ENTRA (lo envia el usuario)
+  OUTBOUND // mensaje que SALE (lo envia el sistema)
+}
+
+enum WaStatus {
+  RECEIVED // entrante recibido
+  SENT // saliente enviado a YCloud
+  DELIVERED // entregado
+  READ // leido
+  FAILED // fallo el envio
+}
+
+// Log de todos los mensajes (entrantes y salientes). El documento lo exige:
+// destinatario, fecha/hora, canal y estado del envio.
+model WhatsappMessage {
+  id          String      @id @default(cuid())
+  direction   WaDirection
+  phone       String // E.164 del contacto (el usuario)
+  body        String      @db.Text
+  status      WaStatus
+  // Tipo de notificacion saliente (recordatorio, confirmacion, etc.) o "bot"/"manual"
+  kind        String?
+  // Referencias opcionales
+  studentId   String?
+  wamid       String? // id del mensaje en WhatsApp
+  error       String?     @db.Text
+  createdAt   DateTime    @default(now())
+
+  student Student? @relation(fields: [studentId], references: [id])
+
+  @@index([phone])
+  @@index([direction])
+  @@index([createdAt])
+}
+
+// Configuracion del bot (una sola fila). Base de conocimiento editable + interruptor.
+model BotConfig {
+  id            Int      @id @default(1)
+  enabled       Boolean  @default(true) // responder con IA automaticamente
+  knowledgeBase String   @db.Text // info de la academia para la IA
+  systemPrompt  String?  @db.Text // instrucciones extra opcionales
+  updatedAt     DateTime @updatedAt
 }

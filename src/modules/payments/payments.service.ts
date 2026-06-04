@@ -129,6 +129,14 @@ export async function createManualPayment(
   if (input.chargeId) {
     await recomputeChargeStatus(input.chargeId);
   }
+
+  // Notifica al estudiante por WhatsApp (sin bloquear ni romper si falla).
+  if (payment.studentId) {
+    void import("../whatsapp/notifications.service.js")
+      .then((m) => m.notifyPaymentReceived(payment.id))
+      .catch((e) => console.error("[notify pago]", (e as Error).message));
+  }
+
   return serialize(payment);
 }
 
