@@ -27,11 +27,12 @@ jobs:
             git fetch --prune origin
             git reset --hard origin/main
             echo "→ Construyendo imagen Docker..."
-            docker-compose -f docker-compose.prod.yml build
+            docker compose -f docker-compose.prod.yml build
             echo "→ Levantando servicios (mysql + backend)..."
-            docker-compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.yml up -d
             echo "→ Esperando que backend esté listo..."
             sleep 10
             echo "→ Verificando salud del backend..."
             curl -f http://127.0.0.1:4000/health || echo "⚠️ health check falló, pero continuamos"
+            docker ps --filter "name=carmenmaria" --format "table {{.Names}}\t{{.Status}}"
             echo "✅ Deploy backend completado."
