@@ -8,6 +8,7 @@ import {
   dashboardController,
   dashboardReportController,
   dashboardExcelController,
+  overviewController,
 } from "./dashboard.controller.js";
 
 export const dashboardRouter = Router();
@@ -15,6 +16,9 @@ export const dashboardRouter = Router();
 const canRead = requireSection("DASHBOARD", "READER");
 
 dashboardRouter.use(requireAuth);
+
+// Overview de inicio: cualquier usuario autenticado (no requiere seccion DASHBOARD)
+dashboardRouter.get("/overview", asyncHandler(overviewController));
 
 dashboardRouter.get(
   "/",

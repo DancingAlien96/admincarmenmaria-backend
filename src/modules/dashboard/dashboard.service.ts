@@ -187,3 +187,98 @@ export async function getDashboard(q: DashboardQuery) {
 }
 
 export type DashboardData = Awaited<ReturnType<typeof getDashboard>>;
+
+// Estadisticas generales para la pagina de inicio (overview).
+const MONTHS_ES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+export async function getOverview() {
+  const now = new Date();
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+  const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+
+  const [
+    studentsByStatus,
+    graduatesTotal,
+    incomeYearAgg,
+    expenseYearAgg,
+    paymentsBySource,
+    monthlyPayments,
+    overdueCharges,
+    actasTotal,
+    waOutbound,
+  ] = await Promise.all([
+    prisma.student.groupBy({ by: ["status"], _count: true }),
+    prisma.graduate.count(),
+    prisma.payment.aggregate({
+      where: { status: "ACTIVO", paidAt: { gte: yearStart, lte: yearEnd } },
+      _sum: { amount: true, discount: true },
+    }),
+    prisma.expense.aggregate({
+      where: { spentAt: { gte: yearStart, lte: yearEnd } },
+      _sum: { amount: true },
+    }),
+    prisma.payment.groupBy({
+      by: ["source"],
+      where: { status: "ACTIVO", paidAt: { gte: yearStart, lte: yearEnd } },
+      _sum: { amount: true },
+      _count: true,
+    }),
+    prisma.payment.findMany({
+      where: { status: "ACTIVO", paidAt: { gte: yearStart, lte: yearEnd } },
+      select: { paidAt: true, amount: true, discount: true },
+    }),
+    prisma.charge.findMany({
+      where: { status: "PENDIENTE", dueDate: { lt: now } },
+      select: { id: true, amount: true },
+    }),
+    prisma.acta.count(),
+    prisma.whatsappMessage.count({ where: { direction: "OUTBOUND" } }),
+  ]);
+
+  // Estudiantes por estado -> objeto
+  const statusCounts: Record<string, number> = {
+    INSCRITO: 0, ACTIVO: 0, EGRESADO: 0, BAJA: 0,
+  };
+  let studentsTotal = 0;
+  for (const r of studentsByStatus) {
+    statusCounts[r.status] = r._count;
+    studentsTotal += r._count;
+  }
+
+  // Ingresos del año (neto) y egresos
+  const incomeYear =
+    Number(incomeYearAgg._sum.amount ?? 0) - Number(incomeYearAgg._sum.discount ?? 0);
+  const expenseYear = Number(expenseYearAgg._sum.amount ?? 0);
+
+  // Serie mensual del año en curso
+  const monthly = MONTHS_ES.map((label, i) => ({ label, income: 0, month: i }));
+  for (const p of monthlyPayments) {
+    const m = p.paidAt.getMonth();
+    monthly[m]!.income += Number(p.amount) - Number(p.discount);
+  }
+
+  // Mora total
+  const moraTotal = overdueCharges.reduce((s, c) => s + Number(c.amount), 0);
+
+  return {
+    year: now.getFullYear(),
+    students: { total: studentsTotal, byStatus: statusCounts },
+    graduatesTotal,
+    actasTotal,
+    finance: {
+      incomeYear,
+      expenseYear,
+      balanceYear: incomeYear - expenseYear,
+      moraTotal,
+    },
+    paymentsBySource: paymentsBySource.map((s) => ({
+      source: s.source,
+      total: Number(s._sum.amount ?? 0),
+      count: s._count,
+    })),
+    monthlyIncome: monthly.map((m) => ({ label: m.label, income: m.income })),
+    whatsappOutbound: waOutbound,
+  };
+}
+
+export type OverviewData = Awaited<ReturnType<typeof getOverview>>;

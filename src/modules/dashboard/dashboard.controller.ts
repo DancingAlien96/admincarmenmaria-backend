@@ -11,6 +11,11 @@ export async function dashboardController(req: Request, res: Response) {
   res.json(data);
 }
 
+// Estadisticas generales de la pagina de inicio (cualquier usuario autenticado).
+export async function overviewController(_req: Request, res: Response) {
+  res.json(await service.getOverview());
+}
+
 export async function dashboardReportController(req: Request, res: Response) {
   const data = await service.getDashboard(
     req.query as unknown as DashboardQuery
