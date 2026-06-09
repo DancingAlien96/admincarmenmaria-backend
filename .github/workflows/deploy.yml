@@ -23,6 +23,12 @@ jobs:
           script: |
             set -e
             cd /opt/carmenmaria/backend
+            echo "→ Verificando .env..."
+            if [ ! -f .env ]; then
+              echo "❌ ERROR: .env no existe. Copia .env.example y completa las variables:"
+              echo "   cp .env.example .env && nano .env"
+              exit 1
+            fi
             echo "→ Trayendo últimos cambios de main..."
             git fetch --prune origin
             git reset --hard origin/main
