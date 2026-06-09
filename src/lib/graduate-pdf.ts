@@ -1,3 +1,4 @@
+import path from "node:path";
 import PDFDocument from "pdfkit";
 import type { Graduate } from "@prisma/client";
 
@@ -5,12 +6,53 @@ const BRAND = "#16314f";
 const GRAY = "#444444";
 const LIGHT = "#e5e7eb";
 
+// Carpeta de imagenes (logo, firma, sello), en la raiz del backend.
+// Tanto en dev (tsx desde la raiz) como en el contenedor, cwd = raiz del proyecto.
+const ASSETS_DIR = path.resolve(process.cwd(), "assets");
+const asset = (name: string) => path.join(ASSETS_DIR, name);
+
 function fmtDate(d: Date): string {
   return new Intl.DateTimeFormat("es-GT", {
     day: "2-digit",
     month: "long",
     year: "numeric",
   }).format(d);
+}
+
+// Fecha larga en español: "Abril 13, 2026".
+// Usa getters UTC: las fechas se guardan como medianoche UTC (dia calendario),
+// asi el dia no se corre por la zona horaria del servidor.
+function fmtLongDate(d: Date): string {
+  const meses = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  ];
+  return `${meses[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}
+
+// Numeros a palabras (para la fecha en letras del cuerpo legal).
+const UNIDADES = [
+  "", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho",
+  "nueve", "diez", "once", "doce", "trece", "catorce", "quince", "dieciséis",
+  "diecisiete", "dieciocho", "diecinueve", "veinte", "veintiuno", "veintidós",
+  "veintitrés", "veinticuatro", "veinticinco", "veintiséis", "veintisiete",
+  "veintiocho", "veintinueve", "treinta", "treinta y uno",
+];
+const DIAS_SEMANA = [
+  "domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado",
+];
+const MESES_LOWER = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+  "septiembre", "octubre", "noviembre", "diciembre",
+];
+function dayInWords(n: number): string {
+  return UNIDADES[n] ?? String(n);
+}
+function yearInWords(year: number): string {
+  // Funciona para 2000-2099 (dos mil ...)
+  const resto = year - 2000;
+  if (resto === 0) return "dos mil";
+  return `dos mil ${UNIDADES[resto] ?? String(resto)}`;
 }
 
 function header(doc: PDFKit.PDFDocument, left: number, right: number) {
@@ -54,7 +96,23 @@ function footer(doc: PDFKit.PDFDocument, left: number, right: number) {
   });
 }
 
-// Constancia de egreso
+// Datos institucionales fijos (del modelo oficial).
+const INST = {
+  carrera: "AUXILIAR DE ENFERMERÍA",
+  avalMinisterial: "23/2017",
+  municipio: "CHIQUIMULA",
+  departamento: "CHIQUIMULA",
+  directora: "Licda. Carmen Alcira Reyes Cerón",
+  cargo: "Directora Técnica",
+  web: "enfermeriacarmenmaria.edu.gt",
+  tel: "5855-0168",
+  correo: "carmenmaria.edu@gmail.com",
+  direccion1: "12 avenida 3ra calle zona 1.",
+  direccion2: "Segundo Nivel Edificio Veredita",
+};
+
+// Constancia / carta de egreso — replica el formato oficial membretado.
+// `g` aporta: fullName, dpi, graduationDate (ciclo escolar = año de graduacion).
 export function generateConstanciaPDF(g: Graduate): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 50 });
@@ -66,56 +124,103 @@ export function generateConstanciaPDF(g: Graduate): Promise<Buffer> {
     const left = doc.page.margins.left;
     const right = doc.page.width - doc.page.margins.right;
     const width = right - left;
-    header(doc, left, right);
 
+    // --- Encabezado: logo (izq) + ubicacion (der) ---
+    try {
+      doc.image(asset("logo.png"), left, 45, { width: 120 });
+    } catch {
+      /* si falta el logo, se omite */
+    }
     doc
-      .fillColor(BRAND)
+      .fillColor("#111111")
       .font("Helvetica-Bold")
-      .fontSize(16)
-      .text("CONSTANCIA DE EGRESO", left, 150, { width, align: "center" });
+      .fontSize(11)
+      .text(`${INST.municipio.charAt(0)}${INST.municipio.slice(1).toLowerCase()},`, right - 200, 55, {
+        width: 200,
+        align: "right",
+      })
+      .text("Guatemala", right - 200, 69, { width: 200, align: "right" });
+    doc
+      .font("Helvetica")
+      .fontSize(8)
+      .fillColor(GRAY)
+      .text(INST.direccion1, right - 200, 88, { width: 200, align: "right" })
+      .text(INST.direccion2, right - 200, 99, { width: 200, align: "right" });
+    doc.moveTo(right - 200, 116).lineTo(right, 116).strokeColor(LIGHT).lineWidth(1).stroke();
 
-    const body =
-      `Por este medio se hace constar que ${g.fullName}, con Documento Personal de ` +
-      `Identificación (DPI) número ${g.dpi}, completó satisfactoriamente el programa ` +
-      `de estudios impartido por la Escuela de Enfermería Carmen María, ` +
-      `habiéndose graduado con fecha ${fmtDate(g.graduationDate)}.`;
+    // --- Fecha (der, en negrita) ---
+    doc
+      .fillColor("#111111")
+      .font("Helvetica-Bold")
+      .fontSize(12)
+      .text(fmtLongDate(g.graduationDate), left, 150, { width, align: "right" });
 
+    // --- A QUIEN INTERESE ---
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(11)
+      .text("A QUIEN INTERESE", left, 195);
+
+    // --- Cuerpo principal ---
+    const ciclo = g.graduationDate.getUTCFullYear();
+    const cuerpo =
+      `Por medio de la presente se hace constar que: ${g.fullName} quien se identifica ` +
+      `con Documento Personal de Identificación No. ${g.dpi}, extendida por RENAP; ` +
+      `cursó legalmente en este establecimiento educativo, la carrera de ${INST.carrera}, ` +
+      `en el ciclo escolar ${ciclo}, plan diario; demostrando competencias adecuadas para ` +
+      `el desempeño del mismo, así como principios éticos de respeto, responsabilidad, ` +
+      `empatía; con mucho carisma y con muchos deseos de superación.`;
     doc
       .fillColor("#111111")
       .font("Helvetica")
       .fontSize(12)
-      .text(body, left, 210, { width, align: "justify", lineGap: 6 });
+      .text(cuerpo, left, 225, { width, align: "justify", lineGap: 5 });
 
-    let y = 320;
-    doc.fillColor(GRAY).fontSize(11);
-    doc.text(`No. de diploma: ${g.diplomaNumber}`, left, y);
-    if (g.mspasCode) {
-      y += 20;
-      doc.text(`Código MSPAS: ${g.mspasCode}`, left, y);
+    // --- Cierre legal con fecha en letras ---
+    const gd = g.graduationDate;
+    const fechaLetras =
+      `EL DÍA ${DIAS_SEMANA[gd.getUTCDay()].toUpperCase()} ${dayInWords(gd.getUTCDate()).toUpperCase()} ` +
+      `DEL MES DE ${MESES_LOWER[gd.getUTCMonth()].toUpperCase()} DEL AÑO ${yearInWords(gd.getUTCFullYear()).toUpperCase()}.`;
+    const cierre =
+      `Y PARA LOS USOS LEGALES QUE A LA INTERESADA CONVENGA; LE EXTIENDO, FIRMO Y SELLO ` +
+      `LA PRESENTE EN UNA HOJA DE PAPEL BOND MEMBRETADA DE LA ESCUELA, CON AVAL MINISTERIAL ` +
+      `No. ${INST.avalMinisterial}; EN EL MUNICIPIO DE ${INST.municipio}, DEPARTAMENTO DE ` +
+      `${INST.departamento}, ${fechaLetras}`;
+    doc.text(cierre, left, doc.y + 24, { width, align: "justify", lineGap: 5 });
+
+    // --- Firma + sello ---
+    const signY = doc.y + 55;
+    try {
+      doc.image(asset("firma.png"), left + 70, signY - 10, { width: 150 });
+    } catch {
+      /* sin firma */
     }
-
+    try {
+      doc.image(asset("sello.png"), right - 170, signY - 20, { width: 130 });
+    } catch {
+      /* sin sello */
+    }
     doc
       .fillColor("#111111")
+      .font("Helvetica-Bold")
+      .fontSize(11)
+      .text(INST.directora, left, signY + 70, { width, align: "center" })
+      .text(INST.cargo, left, signY + 84, { width, align: "center" });
+
+    // --- Pie: contactos (posicion fija con margen amplio, sin pagina extra) ---
+    const footY = doc.page.height - 95;
+    doc.moveTo(left, footY).lineTo(right, footY).strokeColor(LIGHT).lineWidth(1).stroke();
+    doc
+      .fillColor(BRAND)
+      .font("Helvetica-Bold")
+      .fontSize(9)
       .text(
-        "Y para los usos que al interesado convengan, se extiende la presente constancia.",
+        `${INST.web}     ${INST.tel}     ${INST.correo}`,
         left,
-        y + 50,
-        { width, align: "justify", lineGap: 6 }
+        footY + 14,
+        { width, align: "center", lineBreak: false }
       );
 
-    // Espacio de firma
-    const signY = 480;
-    doc.moveTo(left + 120, signY).lineTo(right - 120, signY).strokeColor("#999999").lineWidth(1).stroke();
-    doc
-      .fillColor(GRAY)
-      .fontSize(11)
-      .text("Dirección", left, signY + 8, { width, align: "center" })
-      .text("Escuela de Enfermería Carmen María", left, signY + 24, {
-        width,
-        align: "center",
-      });
-
-    footer(doc, left, right);
     doc.end();
   });
 }

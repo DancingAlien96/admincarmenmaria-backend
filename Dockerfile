@@ -31,6 +31,8 @@ COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 COPY prisma ./prisma
 # Codigo compilado (incluye dist/seed.js)
 COPY --from=build /app/dist ./dist
+# Imagenes para los PDF (logo, firma, sello)
+COPY assets ./assets
 
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
