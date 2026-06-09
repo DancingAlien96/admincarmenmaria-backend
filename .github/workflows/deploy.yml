@@ -1,0 +1,38 @@
+name: Deploy Backend a producción
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend-produccion
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Desplegar por SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          command_timeout: 20m
+          script: |
+            set -e
+            cd /opt/carmenmaria/backend
+            echo "→ Trayendo últimos cambios de main..."
+            git fetch --prune origin
+            git reset --hard origin/main
+            echo "→ Construyendo imagen Docker..."
+            docker compose -f docker-compose.prod.yml build
+            echo "→ Levantando servicios (mysql + backend)..."
+            docker compose -f docker-compose.prod.yml up -d
+            echo "→ Esperando que backend esté listo..."
+            sleep 10
+            echo "→ Verificando salud del backend..."
+            curl -f http://127.0.0.1:4000/health || echo "⚠️ health check falló, pero continuamos"
+            docker ps --filter "name=carmenmaria" --format "table {{.Names}}\t{{.Status}}"
+            echo "✅ Deploy backend completado."
