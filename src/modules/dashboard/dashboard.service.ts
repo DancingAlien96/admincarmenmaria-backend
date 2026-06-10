@@ -30,9 +30,9 @@ async function getMora(from: Date, to: Date) {
     }
   }
 
-  // Estudiantes inscritos/activos (no egresados ni de baja)
+  // Estudiantes activos (no egresados ni de baja)
   const enrolled = await prisma.student.count({
-    where: { archived: false, status: { in: ["INSCRITO", "ACTIVO"] } },
+    where: { archived: false, status: "ACTIVO" },
   });
   const inMora = studentsInMora.size;
   const upToDate = Math.max(0, enrolled - inMora);
@@ -237,7 +237,7 @@ export async function getOverview() {
 
   // Estudiantes por estado -> objeto
   const statusCounts: Record<string, number> = {
-    INSCRITO: 0, ACTIVO: 0, EGRESADO: 0, BAJA: 0,
+    ACTIVO: 0, EGRESADO: 0, BAJA: 0,
   };
   let studentsTotal = 0;
   for (const r of studentsByStatus) {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const STATUS = ["INSCRITO", "ACTIVO", "EGRESADO", "BAJA"] as const;
+const STATUS = ["ACTIVO", "EGRESADO", "BAJA"] as const;
 const DOC_TYPES = [
   "DPI",
   "PARTIDA_NACIMIENTO",

@@ -19,6 +19,7 @@ import {
   whatsappRouter,
   whatsappWebhookRouter,
 } from "./modules/whatsapp/whatsapp.routes.js";
+import { teachersRouter } from "./modules/teachers/teachers.routes.js";
 
 export function createApp() {
   const app = express();
@@ -72,6 +73,7 @@ export function createApp() {
   // El webhook va ANTES del router autenticado: es publico (validado por firma).
   app.use("/api/whatsapp/webhook", whatsappWebhookRouter);
   app.use("/api/whatsapp", whatsappRouter);
+  app.use("/api/teachers", teachersRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);

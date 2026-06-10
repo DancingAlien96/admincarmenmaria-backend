@@ -102,7 +102,7 @@ export async function createStudent(
       // Registro inicial de estado
       statusHistory: {
         create: {
-          toStatus: "INSCRITO",
+          toStatus: "ACTIVO",
           reason: "Expediente creado",
           changedById: userId,
         },

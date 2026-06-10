@@ -76,8 +76,7 @@ model UserPermission {
 // ----------------------------------------------------------------------------
 
 enum StudentStatus {
-  INSCRITO // Proceso de ingreso iniciado, pendiente de completar expediente
-  ACTIVO // Cursando, expediente completo y al dia
+  ACTIVO // Cursando (estado inicial al inscribir)
   EGRESADO // Curso completado, migrado a banca de diplomas
   BAJA // Abandono o expulsion, expediente archivado
 }
@@ -96,7 +95,7 @@ model Student {
   phoneAlt       String?
   email          String?
   // Estado y trazabilidad
-  status         StudentStatus @default(INSCRITO)
+  status         StudentStatus @default(ACTIVO)
   enrollmentDate DateTime      @default(now())
   archived       Boolean       @default(false) // Nunca se elimina, solo se archiva
   createdById    String?
@@ -481,4 +480,71 @@ model BotConfig {
   knowledgeBase String   @db.Text // info de la academia para la IA
   systemPrompt  String?  @db.Text // instrucciones extra opcionales
   updatedAt     DateTime @updatedAt
+}
+
+// ----------------------------------------------------------------------------
+// Catedraticos (personal docente) - registro tipo CV. Solo admin.
+// ----------------------------------------------------------------------------
+
+enum TeacherRole {
+  PRACTICA_HOSPITALARIA // Docente de practica hospitalaria
+  PRACTICA_COMUNITARIA // Docente de practica comunitaria
+  TEORIA // Docente de teoria
+}
+
+enum TeacherDocType {
+  CV
+  DPI
+  TITULO
+  COLEGIADO
+  OTRO
+}
+
+model Teacher {
+  id           String        @id @default(cuid())
+  fullName     String
+  dpi          String?       @unique
+  phone        String?
+  email        String?
+  // Datos profesionales
+  title        String? // titulo / profesion
+  collegiate   String? // numero de colegiado activo
+  specialty    String?
+  notes        String?       @db.Text
+  active       Boolean       @default(true)
+  createdById  String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Un catedratico puede tener varios roles (tabla pivote: MySQL no soporta enum[])
+  roles     TeacherRoleAssignment[]
+  documents TeacherDocument[]
+
+  @@index([fullName])
+}
+
+// Asignacion de rol a catedratico (permite varios roles por persona).
+model TeacherRoleAssignment {
+  id        String      @id @default(cuid())
+  teacherId String
+  role      TeacherRole
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, role])
+  @@index([teacherId])
+}
+
+model TeacherDocument {
+  id        String         @id @default(cuid())
+  teacherId String
+  type      TeacherDocType
+  fileName  String
+  fileUrl   String         @db.Text
+  fileKey   String?
+  createdAt DateTime       @default(now())
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@index([teacherId])
 }
