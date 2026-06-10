@@ -18,6 +18,14 @@ export async function listStudents(q: ListStudentsQuery) {
   const where: Prisma.StudentWhereInput = {
     archived: q.archived ?? false,
     ...(q.status ? { status: q.status } : {}),
+    ...(q.year
+      ? {
+          enrollmentDate: {
+            gte: new Date(q.year, 0, 1),
+            lt: new Date(q.year + 1, 0, 1),
+          },
+        }
+      : {}),
     ...(q.search
       ? {
           OR: [
@@ -82,7 +90,7 @@ export async function createStudent(
   return prisma.student.create({
     data: {
       fullName: input.fullName,
-      dpi: input.dpi,
+      dpi: clean(input.dpi),
       birthDate: input.birthDate,
       department: clean(input.department),
       municipality: clean(input.municipality),
@@ -137,7 +145,7 @@ export async function updateStudent(id: string, input: UpdateStudentInput) {
       where: { id },
       data: {
         fullName: input.fullName,
-        dpi: input.dpi,
+        dpi: input.dpi !== undefined ? clean(input.dpi) : undefined,
         birthDate: input.birthDate,
         department:
           input.department !== undefined ? clean(input.department) : undefined,

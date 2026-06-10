@@ -28,7 +28,8 @@ const optionalDate = z
 
 export const createStudentSchema = z.object({
   fullName: z.string().min(3, "Nombre completo requerido").trim(),
-  dpi: z.string().min(5, "DPI invalido").trim(),
+  // DPI opcional: estudiantes creados desde un pago lo completan despues.
+  dpi: z.string().trim().optional().or(z.literal("")),
   birthDate: optionalDate,
   department: z.string().trim().optional(),
   municipality: z.string().trim().optional(),
@@ -44,6 +45,8 @@ export const updateStudentSchema = createStudentSchema.partial();
 export const listStudentsQuery = z.object({
   search: z.string().trim().optional(),
   status: z.enum(STATUS).optional(),
+  // Año de inscripcion (ciclo escolar)
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
   archived: z
     .enum(["true", "false"])
     .optional()

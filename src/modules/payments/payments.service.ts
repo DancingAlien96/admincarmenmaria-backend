@@ -203,6 +203,35 @@ async function findStudentByEmail(email: string | undefined) {
   });
 }
 
+// Un concepto es de "inscripcion" si lo menciona (nuevo estudiante).
+export function isInscripcionConcept(concept: string): boolean {
+  return /inscrip/i.test(concept);
+}
+
+// Crea un estudiante nuevo a partir de los datos de un pago de inscripcion.
+// Sin DPI (se completa luego). Registra el historial inicial.
+async function createStudentFromPayment(data: {
+  fullName: string;
+  email?: string;
+  phone?: string;
+}): Promise<string> {
+  const student = await prisma.student.create({
+    data: {
+      fullName: data.fullName || "Estudiante sin nombre",
+      email: data.email || null,
+      phonePrimary: data.phone || null,
+      status: "ACTIVO",
+      statusHistory: {
+        create: {
+          toStatus: "ACTIVO",
+          reason: "Alta automatica por pago de inscripcion",
+        },
+      },
+    },
+  });
+  return student.id;
+}
+
 export async function syncWooCommerce(options: { full?: boolean } = {}) {
   // Por defecto solo trae pedidos de los ultimos 120 dias; full=true trae todo
   let after: string | undefined;
@@ -262,12 +291,22 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
         });
         updated++;
       } else {
-        const student = await findStudentByEmail(order.billing.email);
+        const concept = orderConcept(order);
+        let student = await findStudentByEmail(order.billing.email);
+        // Si es un pago de inscripcion y no hay estudiante, lo creamos (nuevo alumno).
+        let studentId = student?.id ?? null;
+        if (!studentId && isInscripcionConcept(concept)) {
+          studentId = await createStudentFromPayment({
+            fullName: payerName,
+            email: order.billing.email,
+            phone: order.billing.phone,
+          });
+        }
         await prisma.payment.create({
           data: {
             wooOrderId: order.id,
-            studentId: student?.id ?? null,
-            concept: orderConcept(order),
+            studentId,
+            concept,
             amount: order.total,
             method,
             source: "WOOCOMMERCE",

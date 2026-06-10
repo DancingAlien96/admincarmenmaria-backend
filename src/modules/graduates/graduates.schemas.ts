@@ -3,7 +3,7 @@ import { z } from "zod";
 export const createGraduateSchema = z.object({
   studentId: z.string().optional().nullable(),
   fullName: z.string().min(3, "Nombre completo requerido").trim(),
-  dpi: z.string().min(5, "DPI invalido").trim(),
+  dpi: z.string().trim().optional().or(z.literal("")),
   email: z.string().email("Correo invalido").trim().optional().or(z.literal("")),
   phone: z.string().trim().optional(),
   mspasCode: z.string().trim().optional(),

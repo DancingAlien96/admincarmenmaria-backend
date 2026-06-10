@@ -84,7 +84,9 @@ enum StudentStatus {
 model Student {
   id             String        @id @default(cuid())
   fullName       String
-  dpi            String        @unique // Identificacion oficial, no repetible
+  // Opcional: los estudiantes creados desde un pago aun no tienen DPI.
+  // Sigue siendo unico cuando esta presente (MySQL permite varios NULL).
+  dpi            String?       @unique // Identificacion oficial, no repetible
   birthDate      DateTime?
   // Direccion
   department     String?
@@ -317,7 +319,7 @@ model Graduate {
   // registra un egresado historico sin expediente en el sistema.
   studentId     String?  @unique
   fullName      String
-  dpi           String   @unique // Identificacion oficial
+  dpi           String?  @unique // Identificacion oficial (opcional)
   email         String?
   phone         String?
   mspasCode     String? // Codigo de MSPAS del egresado
