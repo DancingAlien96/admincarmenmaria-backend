@@ -214,6 +214,7 @@ async function createStudentFromPayment(data: {
   fullName: string;
   email?: string;
   phone?: string;
+  enrollmentDate?: Date; // fecha del pago de inscripcion (ciclo real)
 }): Promise<string> {
   const student = await prisma.student.create({
     data: {
@@ -221,6 +222,8 @@ async function createStudentFromPayment(data: {
       email: data.email || null,
       phonePrimary: data.phone || null,
       status: "ACTIVO",
+      // La inscripcion real es la fecha del pago, no la de hoy.
+      ...(data.enrollmentDate ? { enrollmentDate: data.enrollmentDate } : {}),
       statusHistory: {
         create: {
           toStatus: "ACTIVO",
@@ -300,6 +303,7 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
             fullName: payerName,
             email: order.billing.email,
             phone: order.billing.phone,
+            enrollmentDate: paidAt,
           });
         }
         await prisma.payment.create({

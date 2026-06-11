@@ -18,6 +18,16 @@ export async function createController(req: Request, res: Response) {
   res.status(201).json({ student });
 }
 
+// Sincroniza expedientes desde los pagos de WooCommerce (crea estudiantes
+// nuevos a partir de pagos de inscripcion). Reutiliza el sync completo de pagos.
+export async function syncController(_req: Request, res: Response) {
+  const { syncWooCommerce } = await import(
+    "../payments/payments.service.js"
+  );
+  const result = await syncWooCommerce({ full: true });
+  res.json(result);
+}
+
 export async function updateController(req: Request, res: Response) {
   const student = await service.updateStudent(req.params.id, req.body);
   res.json({ student });

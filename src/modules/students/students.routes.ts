@@ -20,6 +20,7 @@ import {
   changeStatusController,
   addDocumentController,
   deleteDocumentController,
+  syncController,
 } from "./students.controller.js";
 
 export const studentsRouter = Router();
@@ -29,6 +30,9 @@ const canRead = requireSection("STUDENTS", "READER");
 const canEdit = requireSection("STUDENTS", "EDITOR");
 
 studentsRouter.use(requireAuth);
+
+// Sincroniza expedientes desde los pagos (crea estudiantes de inscripciones)
+studentsRouter.post("/sync", canEdit, asyncHandler(syncController));
 
 studentsRouter.get(
   "/",
