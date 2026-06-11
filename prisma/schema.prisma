@@ -550,3 +550,33 @@ model TeacherDocument {
 
   @@index([teacherId])
 }
+
+// ----------------------------------------------------------------------------
+// Acta de Inauguracion (cohorte de un nuevo ciclo). Distinta a las actas de
+// calificaciones. Guarda los datos variables + la lista de alumnos (snapshot).
+// ----------------------------------------------------------------------------
+
+model InauguracionActa {
+  id          String   @id @default(cuid())
+  actaNumber  String // ej. "01-2026"
+  folios      String? // ej. "143,144,145"
+  promocion   String // ej. "decima"
+  cohorte     Int // anio de la cohorte, ej. 2026
+  // Acto
+  actoDate    DateTime // fecha/hora del acto de inauguracion
+  closeDate   DateTime // fecha en que se extiende el acta
+  city        String   @default("Chiquimula")
+  department  String   @default("Chiquimula")
+  // Personas presentes
+  directora   String
+  docente     String
+  secretario  String
+  notes       String?  @db.Text
+  // Snapshot de la lista de alumnos (nombres, en orden), por si el padron cambia
+  students    Json
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([cohorte])
+}

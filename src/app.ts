@@ -20,6 +20,7 @@ import {
   whatsappWebhookRouter,
 } from "./modules/whatsapp/whatsapp.routes.js";
 import { teachersRouter } from "./modules/teachers/teachers.routes.js";
+import { inauguracionRouter } from "./modules/inauguracion/inauguracion.routes.js";
 
 export function createApp() {
   const app = express();
@@ -74,6 +75,7 @@ export function createApp() {
   app.use("/api/whatsapp/webhook", whatsappWebhookRouter);
   app.use("/api/whatsapp", whatsappRouter);
   app.use("/api/teachers", teachersRouter);
+  app.use("/api/inauguracion", inauguracionRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);
