@@ -34,6 +34,7 @@ export const createStudentSchema = z.object({
   department: z.string().trim().optional(),
   municipality: z.string().trim().optional(),
   address: z.string().trim().optional(),
+  sede: z.string().trim().optional().or(z.literal("")),
   phonePrimary: z.string().trim().optional(),
   phoneAlt: z.string().trim().optional(),
   email: z.string().email("Correo invalido").trim().optional().or(z.literal("")),

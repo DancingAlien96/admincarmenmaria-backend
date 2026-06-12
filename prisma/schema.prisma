@@ -96,6 +96,9 @@ model Student {
   phonePrimary   String?
   phoneAlt       String?
   email          String?
+  // Sede en la que se inscribio (Chiquimula / Morales Izabal). Derivada del
+  // pago de admision de WooCommerce; editable a mano.
+  sede           String?
   // Estado y trazabilidad
   status         StudentStatus @default(ACTIVO)
   enrollmentDate DateTime      @default(now())
@@ -117,6 +120,7 @@ model Student {
   @@index([dpi])
   @@index([status])
   @@index([fullName])
+  @@index([sede])
 }
 
 // Persona responsable del estudiante (papa, mama, hermano, etc.)
@@ -245,6 +249,8 @@ model Payment {
   wooOrderId Int?    @unique
   payerName  String?
   payerEmail String?
+  // Sede a la que corresponde el pago, si WooCommerce la trae en el producto.
+  sede       String?
 
   // Trazabilidad
   registeredById String?

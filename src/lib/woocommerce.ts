@@ -4,10 +4,17 @@ import { HttpError } from "./http-error.js";
 // Cliente minimo de la API REST v3 de WooCommerce (solo lectura de pedidos).
 // Node 22 trae fetch nativo.
 
+export interface WooMeta {
+  key?: string;
+  display_key?: string;
+  value: unknown;
+}
+
 export interface WooLineItem {
   name: string;
   quantity: number;
   total: string;
+  meta_data?: WooMeta[];
 }
 
 export interface WooOrder {
@@ -26,6 +33,36 @@ export interface WooOrder {
     phone: string;
   };
   line_items: WooLineItem[];
+  meta_data?: WooMeta[];
+}
+
+// Normaliza la sede a un nombre canonico. Devuelve null si no la reconoce.
+export function normalizeSede(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const s = raw.trim().toLowerCase();
+  if (!s) return null;
+  if (s.includes("izabal") || s.includes("morales")) return "Morales Izabal";
+  if (s.includes("chiquimula")) return "Chiquimula";
+  // Sede desconocida: la guardamos capitalizada tal cual vino.
+  return raw.trim().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Extrae la sede de un pedido: primero la meta "Sede" de cualquier line item,
+// luego el patron "... - Chiquimula/Izabal" en el nombre del producto.
+export function extractSede(order: WooOrder): string | null {
+  for (const li of order.line_items ?? []) {
+    for (const m of li.meta_data ?? []) {
+      const k = String(m.display_key ?? m.key ?? "").toLowerCase();
+      if (k === "sede" && m.value) return normalizeSede(String(m.value));
+    }
+  }
+  for (const li of order.line_items ?? []) {
+    const mm = /\b-\s*(chiquimula|morales\s*izabal|izabal|morales)/i.exec(
+      li.name ?? ""
+    );
+    if (mm) return normalizeSede(mm[1]);
+  }
+  return null;
 }
 
 export function isWooConfigured(): boolean {

@@ -95,6 +95,7 @@ export async function createStudent(
       department: clean(input.department),
       municipality: clean(input.municipality),
       address: clean(input.address),
+      sede: clean(input.sede),
       phonePrimary: clean(input.phonePrimary),
       phoneAlt: clean(input.phoneAlt),
       email: clean(input.email),
@@ -154,6 +155,7 @@ export async function updateStudent(id: string, input: UpdateStudentInput) {
             ? clean(input.municipality)
             : undefined,
         address: input.address !== undefined ? clean(input.address) : undefined,
+        sede: input.sede !== undefined ? clean(input.sede) : undefined,
         phonePrimary:
           input.phonePrimary !== undefined
             ? clean(input.phonePrimary)

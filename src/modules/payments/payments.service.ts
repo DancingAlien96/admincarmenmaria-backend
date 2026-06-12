@@ -1,7 +1,11 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { badRequest, notFound } from "../../lib/http-error.js";
-import { fetchOrders, type WooOrder } from "../../lib/woocommerce.js";
+import {
+  fetchOrders,
+  extractSede,
+  type WooOrder,
+} from "../../lib/woocommerce.js";
 import { recomputeChargeStatus } from "../charges/charges.service.js";
 import type {
   CreatePaymentInput,
@@ -214,6 +218,7 @@ async function createStudentFromPayment(data: {
   fullName: string;
   email?: string;
   phone?: string;
+  sede?: string | null;
   enrollmentDate?: Date; // fecha del pago de inscripcion (ciclo real)
 }): Promise<string> {
   const student = await prisma.student.create({
@@ -221,6 +226,7 @@ async function createStudentFromPayment(data: {
       fullName: data.fullName || "Estudiante sin nombre",
       email: data.email || null,
       phonePrimary: data.phone || null,
+      sede: data.sede ?? null,
       status: "ACTIVO",
       // La inscripcion real es la fecha del pago, no la de hoy.
       ...(data.enrollmentDate ? { enrollmentDate: data.enrollmentDate } : {}),
@@ -279,6 +285,7 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
         : new Date(order.date_created_gmt + "Z");
       const payerName =
         `${order.billing.first_name} ${order.billing.last_name}`.trim();
+      const sede = extractSede(order);
 
       if (existing) {
         // Actualiza datos basicos pero respeta la anulacion y el vinculo manual
@@ -290,8 +297,16 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
             paidAt,
             payerName,
             payerEmail: order.billing.email,
+            ...(sede ? { sede } : {}),
           },
         });
+        // Si el pago trae sede y el estudiante vinculado aun no la tiene, la hereda.
+        if (sede && existing.studentId) {
+          await prisma.student.updateMany({
+            where: { id: existing.studentId, sede: null },
+            data: { sede },
+          });
+        }
         updated++;
       } else {
         const concept = orderConcept(order);
@@ -303,7 +318,14 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
             fullName: payerName,
             email: order.billing.email,
             phone: order.billing.phone,
+            sede,
             enrollmentDate: paidAt,
+          });
+        } else if (sede && studentId) {
+          // Estudiante existente sin sede: la hereda de este pago.
+          await prisma.student.updateMany({
+            where: { id: studentId, sede: null },
+            data: { sede },
           });
         }
         await prisma.payment.create({
@@ -317,6 +339,7 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
             paidAt,
             payerName,
             payerEmail: order.billing.email,
+            sede,
           },
         });
         imported++;

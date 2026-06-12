@@ -206,6 +206,9 @@ export async function getOverview() {
     overdueCharges,
     actasTotal,
     waOutbound,
+    studentsBySedeRows,
+    enrollmentsBySedeRows,
+    incomePayments,
   ] = await Promise.all([
     prisma.student.groupBy({ by: ["status"], _count: true }),
     prisma.graduate.count(),
@@ -233,6 +236,31 @@ export async function getOverview() {
     }),
     prisma.acta.count(),
     prisma.whatsappMessage.count({ where: { direction: "OUTBOUND" } }),
+    // Estudiantes por sede (no archivados)
+    prisma.student.groupBy({
+      by: ["sede"],
+      where: { archived: false },
+      _count: true,
+    }),
+    // Inscripciones del año por sede (estudiantes dados de alta este año)
+    prisma.student.groupBy({
+      by: ["sede"],
+      where: {
+        archived: false,
+        enrollmentDate: { gte: yearStart, lte: yearEnd },
+      },
+      _count: true,
+    }),
+    // Pagos del año con la sede del estudiante (para ingresos por sede)
+    prisma.payment.findMany({
+      where: { status: "ACTIVO", paidAt: { gte: yearStart, lte: yearEnd } },
+      select: {
+        amount: true,
+        discount: true,
+        sede: true,
+        student: { select: { sede: true } },
+      },
+    }),
   ]);
 
   // Estudiantes por estado -> objeto
@@ -260,6 +288,33 @@ export async function getOverview() {
   // Mora total
   const moraTotal = overdueCharges.reduce((s, c) => s + Number(c.amount), 0);
 
+  // --- Demografia por sede ---
+  const SIN_SEDE = "Sin especificar";
+
+  // Estudiantes por sede
+  const studentsBySede = studentsBySedeRows
+    .map((r) => ({ sede: r.sede ?? SIN_SEDE, count: r._count }))
+    .sort((a, b) => b.count - a.count);
+
+  // Inscripciones (altas del año) por sede
+  const enrollmentsBySede = enrollmentsBySedeRows
+    .map((r) => ({ sede: r.sede ?? SIN_SEDE, count: r._count }))
+    .sort((a, b) => b.count - a.count);
+
+  // Ingresos del año por sede: prioriza la sede del estudiante, luego la del pago
+  const incomeMap = new Map<string, { total: number; count: number }>();
+  for (const p of incomePayments) {
+    const sede = p.student?.sede ?? p.sede ?? SIN_SEDE;
+    const net = Number(p.amount) - Number(p.discount);
+    const cur = incomeMap.get(sede) ?? { total: 0, count: 0 };
+    cur.total += net;
+    cur.count += 1;
+    incomeMap.set(sede, cur);
+  }
+  const incomeBySede = [...incomeMap.entries()]
+    .map(([sede, v]) => ({ sede, total: v.total, count: v.count }))
+    .sort((a, b) => b.total - a.total);
+
   return {
     year: now.getFullYear(),
     students: { total: studentsTotal, byStatus: statusCounts },
@@ -278,6 +333,9 @@ export async function getOverview() {
     })),
     monthlyIncome: monthly.map((m) => ({ label: m.label, income: m.income })),
     whatsappOutbound: waOutbound,
+    studentsBySede,
+    enrollmentsBySede,
+    incomeBySede,
   };
 }
 
