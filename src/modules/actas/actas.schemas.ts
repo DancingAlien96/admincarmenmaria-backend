@@ -14,6 +14,9 @@ export const createActaSchema = z.object({
   folios: z.string().trim().optional(),
   phase: z.string().min(2, "Fase requerida").trim(),
   actaDate: z.string().min(1, "Fecha requerida"),
+  closeDate: z.string().optional().or(z.literal("")),
+  directora: z.string().trim().optional().or(z.literal("")),
+  secretario: z.string().trim().optional().or(z.literal("")),
   notes: z.string().trim().optional(),
   entries: z.array(entrySchema).min(1, "Agrega al menos un estudiante"),
 });

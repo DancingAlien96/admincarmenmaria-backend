@@ -368,7 +368,11 @@ model Acta {
   actaNumber String  // No. de acta (lo define el admin)
   folios    String?  // No. de folios correspondiente
   phase     String   // Fase del programa (ej. "Evaluacion Final Fase I")
-  actaDate  DateTime // Fecha que se realizo el acta
+  actaDate  DateTime // Fecha en que se realizo la evaluacion
+  // Datos para el acta oficial certificada (opcionales)
+  closeDate  DateTime? // Fecha en que se extiende/remite el acta
+  directora  String? // Directora Tecnica
+  secretario String? // Secretario que suscribe
   notes     String?  @db.Text
 
   // Trazabilidad del envio a la supervisora

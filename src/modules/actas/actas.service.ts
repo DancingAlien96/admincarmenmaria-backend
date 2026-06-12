@@ -67,6 +67,9 @@ export async function createActa(input: CreateActaInput, userId?: string) {
       folios: clean(input.folios),
       phase: input.phase,
       actaDate: new Date(input.actaDate),
+      closeDate: input.closeDate ? new Date(input.closeDate) : null,
+      directora: clean(input.directora),
+      secretario: clean(input.secretario),
       notes: clean(input.notes),
       createdById: userId,
       entries: {
@@ -106,6 +109,16 @@ export async function updateActa(id: string, input: UpdateActaInput) {
         folios: input.folios !== undefined ? clean(input.folios) : undefined,
         phase: input.phase,
         actaDate: input.actaDate ? new Date(input.actaDate) : undefined,
+        closeDate:
+          input.closeDate !== undefined
+            ? input.closeDate
+              ? new Date(input.closeDate)
+              : null
+            : undefined,
+        directora:
+          input.directora !== undefined ? clean(input.directora) : undefined,
+        secretario:
+          input.secretario !== undefined ? clean(input.secretario) : undefined,
         notes: input.notes !== undefined ? clean(input.notes) : undefined,
       },
       include: { entries: true },
