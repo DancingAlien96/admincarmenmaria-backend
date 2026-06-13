@@ -30,6 +30,19 @@ function fmtLongDate(d: Date): string {
   return `${meses[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
 }
 
+// "Hoy" en zona horaria de Guatemala, empaquetado como mediodia UTC para que
+// los getUTC* devuelvan el dia/mes/año correctos sin desfase (el server corre en UTC).
+function todayInGuatemala(): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Guatemala",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (t: string) => Number(parts.find((p) => p.type === t)!.value);
+  return new Date(Date.UTC(get("year"), get("month") - 1, get("day"), 12));
+}
+
 // Numeros a palabras (para la fecha en letras del cuerpo legal).
 const UNIDADES = [
   "", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho",
@@ -148,12 +161,13 @@ export function generateConstanciaPDF(g: Graduate): Promise<Buffer> {
       .text(INST.direccion2, right - 200, 99, { width: 200, align: "right" });
     doc.moveTo(right - 200, 116).lineTo(right, 116).strokeColor(LIGHT).lineWidth(1).stroke();
 
-    // --- Fecha (der, en negrita) ---
+    // --- Fecha de emision = fecha actual (no la de graduacion) ---
+    const emision = todayInGuatemala();
     doc
       .fillColor("#111111")
       .font("Helvetica-Bold")
       .fontSize(12)
-      .text(fmtLongDate(g.graduationDate), left, 150, { width, align: "right" });
+      .text(fmtLongDate(emision), left, 150, { width, align: "right" });
 
     // --- A QUIEN INTERESE ---
     doc
@@ -176,8 +190,8 @@ export function generateConstanciaPDF(g: Graduate): Promise<Buffer> {
       .fontSize(12)
       .text(cuerpo, left, 225, { width, align: "justify", lineGap: 5 });
 
-    // --- Cierre legal con fecha en letras ---
-    const gd = g.graduationDate;
+    // --- Cierre legal con fecha en letras (fecha de emision) ---
+    const gd = emision;
     const fechaLetras =
       `EL DÍA ${DIAS_SEMANA[gd.getUTCDay()].toUpperCase()} ${dayInWords(gd.getUTCDate()).toUpperCase()} ` +
       `DEL MES DE ${MESES_LOWER[gd.getUTCMonth()].toUpperCase()} DEL AÑO ${yearInWords(gd.getUTCFullYear()).toUpperCase()}.`;
