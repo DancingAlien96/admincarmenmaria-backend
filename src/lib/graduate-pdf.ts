@@ -13,6 +13,7 @@ const asset = (name: string) => path.join(ASSETS_DIR, name);
 
 function fmtDate(d: Date): string {
   return new Intl.DateTimeFormat("es-GT", {
+    timeZone: "America/Guatemala",
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -68,24 +69,28 @@ function yearInWords(year: number): string {
   return `dos mil ${UNIDADES[resto] ?? String(resto)}`;
 }
 
+// Membrete oficial: logo (izq) + datos de ubicacion (der), igual que la constancia.
 function header(doc: PDFKit.PDFDocument, left: number, right: number) {
+  try {
+    doc.image(asset("logo.png"), left, 45, { width: 120 });
+  } catch {
+    /* si falta el logo, se omite */
+  }
+  const cap =
+    INST.municipio.charAt(0) + INST.municipio.slice(1).toLowerCase();
   doc
-    .fillColor(BRAND)
+    .fillColor("#111111")
     .font("Helvetica-Bold")
-    .fontSize(18)
-    .text("Escuela de Enfermería Carmen María", left, 55, {
-      width: right - left,
-      align: "center",
-    });
+    .fontSize(11)
+    .text(`${cap},`, right - 200, 55, { width: 200, align: "right" })
+    .text("Guatemala", right - 200, 69, { width: 200, align: "right" });
   doc
-    .fillColor(GRAY)
     .font("Helvetica")
-    .fontSize(10)
-    .text("enfermeriacarmenmaria.edu.gt", left, 80, {
-      width: right - left,
-      align: "center",
-    });
-  doc.moveTo(left, 105).lineTo(right, 105).strokeColor(BRAND).lineWidth(2).stroke();
+    .fontSize(8)
+    .fillColor(GRAY)
+    .text(INST.direccion1, right - 200, 88, { width: 200, align: "right" })
+    .text(INST.direccion2, right - 200, 99, { width: 200, align: "right" });
+  doc.moveTo(right - 200, 116).lineTo(right, 116).strokeColor(LIGHT).lineWidth(1).stroke();
 }
 
 function footer(doc: PDFKit.PDFDocument, left: number, right: number) {
@@ -296,17 +301,29 @@ export function generateRecommendationPDF(
 
     doc.text(body, left, 250, { width, align: "justify", lineGap: 6 });
 
-    // Firma
-    const signY = 470;
-    doc.moveTo(left + 120, signY).lineTo(right - 120, signY).strokeColor("#999999").lineWidth(1).stroke();
-    doc
-      .fillColor(GRAY)
-      .fontSize(11)
-      .text("Dirección", left, signY + 8, { width, align: "center" })
-      .text("Escuela de Enfermería Carmen María", left, signY + 24, {
-        width,
-        align: "center",
+    // --- Firma + sello (igual que la constancia) ---
+    const signY = doc.y + 60;
+    const firmaW = 150;
+    try {
+      doc.image(asset("firma.png"), left + (width - firmaW) / 2, signY - 10, {
+        width: firmaW,
       });
+    } catch {
+      /* sin firma */
+    }
+    try {
+      doc.image(asset("sello-trim.png"), right - 135, signY - 18, {
+        width: 130,
+      });
+    } catch {
+      /* sin sello */
+    }
+    doc
+      .fillColor("#111111")
+      .font("Helvetica-Bold")
+      .fontSize(11)
+      .text(INST.directora, left, signY + 70, { width, align: "center" })
+      .text(INST.cargo, left, signY + 84, { width, align: "center" });
 
     footer(doc, left, right);
     doc.end();
