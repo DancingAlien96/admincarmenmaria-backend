@@ -55,3 +55,15 @@ export async function deleteDocumentController(req: Request, res: Response) {
   const result = await service.deleteDocument(req.params.id, req.params.docId);
   res.json(result);
 }
+
+// Posibles duplicados (grupos por nombre normalizado).
+export async function duplicatesController(_req: Request, res: Response) {
+  const groups = await service.findDuplicateGroups();
+  res.json({ groups });
+}
+
+// Fusiona dos expedientes (conserva keepId, absorbe dupId).
+export async function mergeController(req: Request, res: Response) {
+  const student = await service.mergeStudents(req.body.keepId, req.body.dupId);
+  res.json({ student });
+}

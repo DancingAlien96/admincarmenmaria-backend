@@ -6,6 +6,7 @@ import {
   extractSede,
   type WooOrder,
 } from "../../lib/woocommerce.js";
+import { normalizeName } from "../../lib/normalize.js";
 import { recomputeChargeStatus } from "../charges/charges.service.js";
 import type {
   CreatePaymentInput,
@@ -198,13 +199,38 @@ function orderConcept(order: WooOrder): string {
   return items && items.length > 0 ? items.join(", ") : "Pago en linea";
 }
 
-// Intenta vincular automaticamente por correo del comprador
-async function findStudentByEmail(email: string | undefined) {
-  if (!email) return null;
-  return prisma.student.findFirst({
-    where: { email: { equals: email } },
-    select: { id: true },
+// Indice en memoria de estudiantes (correo + nombre normalizado) para vincular
+// pagos sin crear duplicados. Se carga una vez por sync y se actualiza al crear.
+type StudentIndex = {
+  byEmail: Map<string, string>;
+  byName: Map<string, string>;
+};
+
+async function buildStudentIndex(): Promise<StudentIndex> {
+  const rows = await prisma.student.findMany({
+    select: { id: true, fullName: true, email: true },
   });
+  const byEmail = new Map<string, string>();
+  const byName = new Map<string, string>();
+  for (const r of rows) {
+    if (r.email) byEmail.set(r.email.toLowerCase(), r.id);
+    const key = normalizeName(r.fullName);
+    if (key && !byName.has(key)) byName.set(key, r.id);
+  }
+  return { byEmail, byName };
+}
+
+// Busca un estudiante existente por correo exacto o por nombre normalizado.
+function findInIndex(
+  idx: StudentIndex,
+  email: string | undefined,
+  fullName: string
+): string | null {
+  const emailKey = email?.toLowerCase();
+  if (emailKey && idx.byEmail.has(emailKey)) return idx.byEmail.get(emailKey)!;
+  const nameKey = normalizeName(fullName);
+  if (nameKey && idx.byName.has(nameKey)) return idx.byName.get(nameKey)!;
+  return null;
 }
 
 // Un concepto es de "inscripcion" si lo menciona (nuevo estudiante).
@@ -255,6 +281,9 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
   let imported = 0;
   let updated = 0;
   let skipped = 0;
+
+  // Indice de estudiantes para vincular pagos sin crear duplicados.
+  const idx = await buildStudentIndex();
 
   do {
     const { orders, totalPages: tp } = await fetchOrders({
@@ -310,9 +339,9 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
         updated++;
       } else {
         const concept = orderConcept(order);
-        let student = await findStudentByEmail(order.billing.email);
-        // Si es un pago de inscripcion y no hay estudiante, lo creamos (nuevo alumno).
-        let studentId = student?.id ?? null;
+        // Vincula por correo o por nombre normalizado (evita duplicados).
+        let studentId = findInIndex(idx, order.billing.email, payerName);
+        // Si es un pago de inscripcion y no existe el estudiante, lo creamos.
         if (!studentId && isInscripcionConcept(concept)) {
           studentId = await createStudentFromPayment({
             fullName: payerName,
@@ -321,6 +350,11 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
             sede,
             enrollmentDate: paidAt,
           });
+          // Registra el nuevo estudiante en el indice para los siguientes pagos.
+          const emailKey = order.billing.email?.toLowerCase();
+          if (emailKey) idx.byEmail.set(emailKey, studentId);
+          const nameKey = normalizeName(payerName);
+          if (nameKey && !idx.byName.has(nameKey)) idx.byName.set(nameKey, studentId);
         } else if (sede && studentId) {
           // Estudiante existente sin sede: la hereda de este pago.
           await prisma.student.updateMany({

@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
-import { notFound } from "../../lib/http-error.js";
+import { notFound, badRequest } from "../../lib/http-error.js";
 import { deleteFile } from "../../lib/storage.js";
+import { normalizeName } from "../../lib/normalize.js";
 import { migrateStudentToGraduate } from "../graduates/graduates.service.js";
 import type {
   CreateStudentInput,
@@ -234,4 +235,108 @@ export async function deleteDocument(studentId: string, docId: string) {
   // Borra el archivo fisico del disco (no falla si ya no existe).
   await deleteFile(doc.fileKey);
   return { ok: true };
+}
+
+// --- Integridad: deteccion y fusion de expedientes duplicados ---------------
+
+// Agrupa expedientes (no archivados) por nombre normalizado y devuelve los
+// grupos con mas de un registro: posibles duplicados.
+export async function findDuplicateGroups() {
+  const rows = await prisma.student.findMany({
+    where: { archived: false },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      fullName: true,
+      dpi: true,
+      email: true,
+      phonePrimary: true,
+      sede: true,
+      status: true,
+      enrollmentDate: true,
+      createdAt: true,
+      _count: {
+        select: { payments: true, documents: true, charges: true, guardians: true },
+      },
+    },
+  });
+
+  const groups = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const key = normalizeName(r.fullName);
+    if (!key) continue;
+    const list = groups.get(key);
+    if (list) list.push(r);
+    else groups.set(key, [r]);
+  }
+
+  return [...groups.entries()]
+    .filter(([, list]) => list.length > 1)
+    .map(([key, students]) => ({ key, students }));
+}
+
+const MERGE_FIELDS = [
+  "dpi", "birthDate", "department", "municipality", "address", "sede",
+  "phonePrimary", "phoneAlt", "email",
+] as const;
+
+// Fusiona el expediente `dupId` dentro de `keepId`: reasigna todas sus
+// relaciones, completa los campos vacios del principal y elimina el duplicado.
+export async function mergeStudents(keepId: string, dupId: string) {
+  if (keepId === dupId) {
+    throw badRequest("No se puede fusionar un expediente consigo mismo");
+  }
+  const [keep, dup] = await Promise.all([
+    prisma.student.findUnique({ where: { id: keepId } }),
+    prisma.student.findUnique({ where: { id: dupId } }),
+  ]);
+  if (!keep) throw notFound("Expediente a conservar no encontrado");
+  if (!dup) throw notFound("Expediente duplicado no encontrado");
+  if (keep.dpi && dup.dpi && keep.dpi !== dup.dpi) {
+    throw badRequest(
+      "Ambos expedientes tienen un DPI distinto; no parecen ser la misma persona."
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const where = { studentId: dupId };
+    const data = { studentId: keepId };
+    // Reasigna todas las relaciones del duplicado al principal.
+    await tx.payment.updateMany({ where, data });
+    await tx.charge.updateMany({ where, data });
+    await tx.studentDocument.updateMany({ where, data });
+    await tx.guardian.updateMany({ where, data });
+    await tx.studentStatusHistory.updateMany({ where, data });
+    await tx.actaEntry.updateMany({ where, data });
+    await tx.whatsappMessage.updateMany({ where, data });
+
+    // Graduate es 1:1. Solo se mueve si el principal aun no tiene uno.
+    const dupGrad = await tx.graduate.findUnique({ where: { studentId: dupId } });
+    if (dupGrad) {
+      const keepGrad = await tx.graduate.findUnique({
+        where: { studentId: keepId },
+      });
+      await tx.graduate.update({
+        where: { studentId: dupId },
+        data: { studentId: keepGrad ? null : keepId },
+      });
+    }
+
+    // Borra el duplicado ANTES de copiar campos (libera dpi/email unicos).
+    await tx.student.delete({ where: { id: dupId } });
+
+    // Completa los campos vacios del principal con los del duplicado.
+    const fill: Record<string, unknown> = {};
+    for (const f of MERGE_FIELDS) {
+      if (!keep[f] && dup[f]) fill[f] = dup[f];
+    }
+    if (Object.keys(fill).length > 0) {
+      await tx.student.update({ where: { id: keepId }, data: fill });
+    }
+
+    return tx.student.findUnique({
+      where: { id: keepId },
+      include: { guardians: true },
+    });
+  });
 }

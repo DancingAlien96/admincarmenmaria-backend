@@ -68,6 +68,11 @@ export const addDocumentSchema = z.object({
   fileKey: z.string().optional(),
 });
 
+export const mergeStudentsSchema = z.object({
+  keepId: z.string().min(1, "Falta el expediente a conservar"),
+  dupId: z.string().min(1, "Falta el expediente duplicado"),
+});
+
 export const studentIdParam = z.object({ id: z.string().min(1) });
 export const docParams = z.object({
   id: z.string().min(1),

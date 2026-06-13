@@ -9,6 +9,7 @@ import {
   listStudentsQuery,
   changeStatusSchema,
   addDocumentSchema,
+  mergeStudentsSchema,
   studentIdParam,
   docParams,
 } from "./students.schemas.js";
@@ -21,6 +22,8 @@ import {
   addDocumentController,
   deleteDocumentController,
   syncController,
+  duplicatesController,
+  mergeController,
 } from "./students.controller.js";
 
 export const studentsRouter = Router();
@@ -33,6 +36,15 @@ studentsRouter.use(requireAuth);
 
 // Sincroniza expedientes desde los pagos (crea estudiantes de inscripciones)
 studentsRouter.post("/sync", canEdit, asyncHandler(syncController));
+
+// Integridad: posibles duplicados y fusion (rutas fijas antes de "/:id")
+studentsRouter.get("/duplicates", canRead, asyncHandler(duplicatesController));
+studentsRouter.post(
+  "/merge",
+  canEdit,
+  validate({ body: mergeStudentsSchema }),
+  asyncHandler(mergeController)
+);
 
 studentsRouter.get(
   "/",
