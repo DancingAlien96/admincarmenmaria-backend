@@ -190,13 +190,20 @@ export function generateConstanciaPDF(g: Graduate): Promise<Buffer> {
 
     // --- Firma + sello ---
     const signY = doc.y + 55;
+    const firmaW = 150;
     try {
-      doc.image(asset("firma.png"), left + 70, signY - 10, { width: 150 });
+      // Firma centrada, encima del nombre (que tambien va centrado).
+      doc.image(asset("firma.png"), left + (width - firmaW) / 2, signY - 10, {
+        width: firmaW,
+      });
     } catch {
       /* sin firma */
     }
     try {
-      doc.image(asset("sello.png"), right - 170, signY - 20, { width: 130 });
+      // Sello recortado (sin margen) y mas grande, anclado a la derecha.
+      doc.image(asset("sello-trim.png"), right - 135, signY - 18, {
+        width: 130,
+      });
     } catch {
       /* sin sello */
     }
