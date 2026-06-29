@@ -307,7 +307,6 @@ export async function mergeStudents(keepId: string, dupId: string) {
     await tx.studentDocument.updateMany({ where, data });
     await tx.guardian.updateMany({ where, data });
     await tx.studentStatusHistory.updateMany({ where, data });
-    await tx.actaEntry.updateMany({ where, data });
     await tx.whatsappMessage.updateMany({ where, data });
 
     // Graduate es 1:1. Solo se mueve si el principal aun no tiene uno.

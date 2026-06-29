@@ -9,6 +9,9 @@ import {
   listActasQuery,
   actaIdParam,
   sendActaSchema,
+  createTemplateSchema,
+  updateTemplateSchema,
+  templateIdParam,
 } from "./actas.schemas.js";
 import {
   listController,
@@ -17,7 +20,13 @@ import {
   updateController,
   deleteController,
   pdfController,
+  previewController,
   sendController,
+  listTemplatesController,
+  getTemplateController,
+  createTemplateController,
+  updateTemplateController,
+  deleteTemplateController,
 } from "./actas.controller.js";
 
 export const actasRouter = Router();
@@ -27,6 +36,37 @@ const canEdit = requireSection("ACTAS", "EDITOR");
 
 actasRouter.use(requireAuth);
 
+// --- Plantillas (rutas fijas antes de "/:id") ---
+actasRouter.get("/templates", canRead, asyncHandler(listTemplatesController));
+actasRouter.post(
+  "/templates",
+  canEdit,
+  validate({ body: createTemplateSchema }),
+  asyncHandler(createTemplateController)
+);
+actasRouter.get(
+  "/templates/:id",
+  canRead,
+  validate({ params: templateIdParam }),
+  asyncHandler(getTemplateController)
+);
+actasRouter.patch(
+  "/templates/:id",
+  canEdit,
+  validate({ params: templateIdParam, body: updateTemplateSchema }),
+  asyncHandler(updateTemplateController)
+);
+actasRouter.delete(
+  "/templates/:id",
+  canEdit,
+  validate({ params: templateIdParam }),
+  asyncHandler(deleteTemplateController)
+);
+
+// Vista previa del PDF sin guardar
+actasRouter.post("/preview", canRead, asyncHandler(previewController));
+
+// --- Actas ---
 actasRouter.get(
   "/",
   canRead,

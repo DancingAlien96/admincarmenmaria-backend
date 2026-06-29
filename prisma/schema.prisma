@@ -114,7 +114,6 @@ model Student {
   payments      Payment[]
   charges       Charge[]
   graduate      Graduate?
-  actaEntries   ActaEntry[]
   whatsappMessages WhatsappMessage[]
 
   @@index([dpi])
@@ -369,46 +368,58 @@ model RecommendationLetter {
 // Acta grupal: lista a los estudiantes de una fase con sus punteos.
 // ----------------------------------------------------------------------------
 
-model Acta {
+// Plantilla reutilizable de acta: cuerpo con marcadores ({{...}}, {{tabla}},
+// {{lista}}) que el admin gestiona y reutiliza al crear actas.
+model ActaTemplate {
   id        String   @id @default(cuid())
-  actaNumber String  // No. de acta (lo define el admin)
-  folios    String?  // No. de folios correspondiente
-  phase     String   // Fase del programa (ej. "Evaluacion Final Fase I")
-  actaDate  DateTime // Fecha en que se realizo la evaluacion
-  // Datos para el acta oficial certificada (opcionales)
+  name      String   // ej. "Calificaciones", "Inauguracion"
+  title     String?  // titulo por defecto del acta
+  body      String   @db.Text // cuerpo con marcadores
+  columns   Json?    // encabezados de tabla por defecto (string[])
+  signers   Json?    // firmantes por defecto [{name, role}]
+  vars      Json?    // variables por defecto {clave: valor}
+  block     String?  // "tabla" | "lista" | null (que bloque usa)
+  createdById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+// Acta unificada y configurable. El cuerpo es texto libre con marcadores;
+// el sistema solo garantiza el formato oficial (membrete, firma, sello).
+model Acta {
+  id         String    @id @default(cuid())
+  actaNumber String    // No. de acta (lo define el admin)
+  folios     String?   // No. de folios correspondiente
+  title      String?   // titulo / tipo de acta
+  actaDate   DateTime  // Fecha del acto/evaluacion
   closeDate  DateTime? // Fecha en que se extiende/remite el acta
-  directora  String? // Directora Tecnica
-  secretario String? // Secretario que suscribe
-  notes     String?  @db.Text
+  city       String    @default("Chiquimula")
+  department String    @default("Chiquimula")
+  body       String    @db.Text // snapshot del cuerpo final con marcadores
+  vars       Json?     // variables {clave: valor}
+  columns    Json?     // encabezados de tabla (string[])
+  rows       Json?     // filas [{name, value}] para {{tabla}}/{{lista}}
+  signers    Json?     // firmantes [{name, role}]
+  notes      String?   @db.Text
+  templateId String?   // plantilla de origen (informativo)
 
   // Trazabilidad del envio a la supervisora
-  sentAt    DateTime?
-  sentTo    String?
+  sentAt DateTime?
+  sentTo String?
 
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  createdBy User?       @relation("ActaCreatedBy", fields: [createdById], references: [id])
-  entries   ActaEntry[]
+  createdBy User? @relation("ActaCreatedBy", fields: [createdById], references: [id])
 
   @@index([actaDate])
 }
 
 // Un renglon del acta: estudiante + punteo. Se guarda el nombre por si el
 // expediente cambia luego (el acta es un documento historico).
-model ActaEntry {
-  id        String  @id @default(cuid())
-  actaId    String
-  studentId String?
-  studentName String // nombre tal cual aparecio en el acta
-  score     Decimal @db.Decimal(5, 2) // punteo 0-100
-
-  acta    Acta     @relation(fields: [actaId], references: [id], onDelete: Cascade)
-  student Student? @relation(fields: [studentId], references: [id])
-
-  @@index([actaId])
-}
 
 // ----------------------------------------------------------------------------
 // Modulo 4 - Dashboard Financiero (Egresos)
@@ -566,27 +577,3 @@ model TeacherDocument {
 // calificaciones. Guarda los datos variables + la lista de alumnos (snapshot).
 // ----------------------------------------------------------------------------
 
-model InauguracionActa {
-  id          String   @id @default(cuid())
-  actaNumber  String // ej. "01-2026"
-  folios      String? // ej. "143,144,145"
-  promocion   String // ej. "decima"
-  cohorte     Int // anio de la cohorte, ej. 2026
-  // Acto
-  actoDate    DateTime // fecha/hora del acto de inauguracion
-  closeDate   DateTime // fecha en que se extiende el acta
-  city        String   @default("Chiquimula")
-  department  String   @default("Chiquimula")
-  // Personas presentes
-  directora   String
-  docente     String
-  secretario  String
-  notes       String?  @db.Text
-  // Snapshot de la lista de alumnos (nombres, en orden), por si el padron cambia
-  students    Json
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([cohorte])
-}
