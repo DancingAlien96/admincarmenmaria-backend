@@ -217,6 +217,16 @@ function renderTable(
   doc.y = y + 12;
 }
 
+// Firmas manuscritas conocidas: se estampan sobre el nombre del firmante
+// cuyo nombre coincida. Se amplía agregando entradas aquí.
+const SIGNATURES: { match: RegExp; asset: string }[] = [
+  { match: /sarmiento/i, asset: "firma.png" },
+  { match: /duarte/i, asset: "firma-izabal.png" },
+];
+function signatureFor(name: string): string | null {
+  return SIGNATURES.find((s) => s.match.test(name))?.asset ?? null;
+}
+
 function renderSigners(
   doc: PDFKit.PDFDocument,
   left: number,
@@ -227,46 +237,43 @@ function renderSigners(
 ) {
   if (signers.length === 0) return;
 
-  // Bloque que no se parte entre páginas.
-  if (doc.y + 200 > doc.page.height - doc.page.margins.bottom) {
+  // El bloque completo no debe partirse entre páginas (~135px por firmante).
+  const blockH = 50 + signers.length * 130;
+  if (doc.y + blockH > doc.page.height - doc.page.margins.bottom) {
     doc.addPage();
     doc.y = doc.page.margins.top;
   }
-  const signY = doc.y + 55;
   const firmaW = 150;
+  let blockY = doc.y + 55;
 
-  // Firma centrada, arriba del nombre del primer firmante (mismo espaciado
-  // que la constancia: ~80px entre la firma y el nombre).
-  try {
-    doc.image(asset("firma.png"), left + (width - firmaW) / 2, signY - 10, {
-      width: firmaW,
-    });
-  } catch {
-    /* sin firma */
-  }
-  // Sello a la derecha (según la sede; mismo tamaño que la constancia).
-  try {
-    doc.image(asset(sealAsset), right - 135, signY - 18, { width: 130 });
-  } catch {
-    /* sin sello */
-  }
-
-  // Primer firmante: nombre (negrita) + cargo, centrados bajo la firma.
-  doc.fillColor("#111111").font("Helvetica-Bold").fontSize(11);
-  doc.text(signers[0].name, left, signY + 70, { width, align: "center" });
-  doc.font("Helvetica").text(signers[0].role, left, signY + 84, {
-    width,
-    align: "center",
-  });
-
-  // Firmantes adicionales: Vo.Bo. centrados debajo.
-  let yy = signY + 116;
-  for (const s of signers.slice(1)) {
-    doc.font("Helvetica-Bold").text(`Vo.Bo. ${s.name}`, left, yy, {
+  signers.forEach((s, i) => {
+    // Firma manuscrita centrada sobre el nombre (si hay una para este firmante).
+    const sigAsset = signatureFor(s.name);
+    if (sigAsset) {
+      try {
+        doc.image(asset(sigAsset), left + (width - firmaW) / 2, blockY - 10, {
+          width: firmaW,
+        });
+      } catch {
+        /* sin firma */
+      }
+    }
+    // El sello va a la derecha, al nivel del primer firmante.
+    if (i === 0) {
+      try {
+        doc.image(asset(sealAsset), right - 135, blockY - 18, { width: 130 });
+      } catch {
+        /* sin sello */
+      }
+    }
+    // Nombre (negrita) + cargo, centrados. Los firmantes 2+ llevan "Vo.Bo.".
+    const label = i === 0 ? s.name : `Vo.Bo. ${s.name}`;
+    doc.fillColor("#111111").font("Helvetica-Bold").fontSize(11);
+    doc.text(label, left, blockY + 60, { width, align: "center" });
+    doc.font("Helvetica").text(s.role, left, blockY + 74, {
       width,
       align: "center",
     });
-    doc.font("Helvetica").text(s.role, left, yy + 14, { width, align: "center" });
-    yy += 46;
-  }
+    blockY += 130;
+  });
 }
