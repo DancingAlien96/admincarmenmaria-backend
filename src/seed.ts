@@ -1,5 +1,3 @@
-// Seed del admin inicial. Se compila a dist/seed.js y lo ejecuta el
-// docker-entrypoint con `node` (sin depender de tsx en runtime).
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
@@ -8,31 +6,108 @@ dotenv.config();
 
 const prisma = new PrismaClient();
 
-async function main() {
+async function seedAdmin() {
   const email = process.env.ADMIN_EMAIL ?? "admin@enfermeriacarmenmaria.edu.gt";
   const password = process.env.ADMIN_PASSWORD;
   const name = process.env.ADMIN_NAME ?? "Administrador";
 
-  // Sin contrasena definida NO se crea admin (evita un default debil y publico).
   if (!password || password.length < 8) {
-    console.error(
-      "✖ ADMIN_PASSWORD no definida o muy corta. No se crea el administrador."
-    );
+    console.error("✖ ADMIN_PASSWORD no definida o muy corta. No se crea el administrador.");
     return;
   }
-
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     console.log(`✔ El administrador ya existe: ${email}`);
     return;
   }
-
   const passwordHash = await bcrypt.hash(password, 10);
   await prisma.user.create({
     data: { name, email, passwordHash, role: "ADMIN", active: true },
   });
-
   console.log(`✔ Administrador creado: ${email}`);
+}
+
+const DIRECTORA = "Licda. Ana Patricia Corado Arroyo";
+const SECRETARIO = "Lic. Héctor Manuel Sarmiento Reyes";
+
+const CALIF_BODY = `El infrascrito Secretario de la Escuela Privada de auxiliares de Enfermería "CARMEN MARÍA" CERTIFICA: Haber tenido a la vista el Libro de Registro de Calificaciones autorizado por el Departamento de Formación y Educación en Salud del Ministerio de Salud Pública y Asistencia Social de fecha veinte de enero del año dos mil diecisiete (20/01/2017) en el que a folios números {{folios}} se encuentra el Acta número {{numero}}, que transcrita literalmente dice: --------------------------------------------------
+
+Acta {{numero}}. En la ciudad de {{ciudad}} del Departamento de {{departamento}} siendo las {{hora_letras}} en punto del día {{fecha_letras}}, estando reunidos en oficinas administrativas de la Escuela Privada de Auxiliares de Enfermería Carmen María de Chiquimula, {{directora}}, Directora Técnica y quien suscribe la presente, {{secretario}}, Secretario, dejando constancia de lo siguiente. PRIMERO. {{directora}}, Directora Técnica da palabras de bienvenida a los estudiantes y procede a indicar que el día de hoy se realizará la evaluación final de la {{fase}}. SEGUNDO: La Dirección da detalles e instrucciones a los estudiantes para elaborar dicha evaluación, indicando que tienen una hora para realizarla. TERCERO: El Secretario procede a registrar las notas obtenidas durante dicha evaluación, siendo estas las siguientes:
+
+{{tabla}}
+
+CUARTO. No habiendo más que hacer constar se da por finalizada la presente acta, en el mismo lugar y fecha, siendo las {{hora_cierre_letras}} en punto. Damos fe los que en ella intervenimos.
+
+Y PARA REMITIR A DONDE CORRESPONDE, SE EXTIENDE LA PRESENTE EN PAPEL BOND MEMBRETADO, EL DÍA {{FECHA_CIERRE_LETRAS}}.`;
+
+const INAUG_BODY = `El infrascrito Secretario de la Escuela Privada de auxiliares de Enfermería "CARMEN MARÍA" CERTIFICA: Haber tenido a la vista el Libro de Actas autorizado por el Departamento de Formación y Educación en Salud del Ministerio de Salud Pública y Asistencia Social de fecha veinte de febrero del año dos mil diecisiete (20/02/2017) en el que a folios números {{folios}} se encuentra el Acta número {{numero}}, que transcrita literalmente dice: --------------------------------------------------
+
+Acta {{numero}}. En la ciudad de {{ciudad}} del Departamento de {{departamento}} siendo las {{hora_letras}} en punto del día {{fecha_letras}}, estando reunidos en oficinas administrativas de la Escuela Privada de Auxiliares de Enfermería "Carmen María", doce avenida tercera calle, segundo nivel edificio Veredita, las siguientes personas: {{directora}}, Directora Técnica; {{docente}}, Docente; Y quien suscribe la presente acta {{secretario}}, Secretario; dejando constancia de lo siguiente: PRIMERO: Se da por iniciado el acto de inauguración correspondiente a la {{promocion}} promoción de auxiliares de enfermería del año {{cohorte_letras}}, la Dirección procede a dar las palabras de bienvenida a los presentes. SEGUNDO: El Secretario procede a presentar al personal administrativo y docente de la escuela; también hace presentación de la resolución Ministerial que avala al centro educativo y procede a informar los detalles generales del curso. TERCERO: El personal docente procede a presentarse con el grupo estudiantil e informa que formará parte del personal que impartirá el curso. CUARTO: La Dirección procede a dar lectura a la normativa interna de la escuela. QUINTO: El Secretario procede a informar y hacer entrega de la solicitud de ingreso y contrato educativo con los presentes. SEXTO: El Secretario procede a efectuar registro de {{total_letras}} alumnos para la cohorte {{cohorte_letras}}, siendo estos los siguientes:
+
+{{lista}}
+
+SÉPTIMO: El Secretario procede a dejar establecido el grupo oficial para la cohorte {{cohorte_letras}} y procede a recoger las solicitudes de ingreso firmadas por cada alumno. OCTAVO: No habiendo más que hacer constar se da por finalizada la presente, en el mismo lugar y fecha, siendo las {{hora_cierre_letras}} en punto. Damos fé.
+
+Y PARA REMITIR A DONDE CORRESPONDE, SE EXTIENDE LA PRESENTE EN PAPEL BOND MEMBRETADO, EL {{FECHA_CIERRE_LETRAS}}.`;
+
+const TEMPLATES = [
+  {
+    name: "Calificaciones",
+    title: "Acta de Calificaciones",
+    body: CALIF_BODY,
+    block: "tabla",
+    columns: ["NO.", "NOMBRE DEL ALUMNO", "Nota Obtenida"],
+    signers: [
+      { name: SECRETARIO, role: "Secretario" },
+      { name: DIRECTORA, role: "Directora Técnica" },
+    ],
+    vars: { directora: DIRECTORA, secretario: SECRETARIO, fase: "Fase I" },
+  },
+  {
+    name: "Inauguración",
+    title: "Acta de Inauguración",
+    body: INAUG_BODY,
+    block: "lista",
+    columns: ["NO.", "NOMBRE DEL ALUMNO"],
+    signers: [
+      { name: SECRETARIO, role: "Secretario" },
+      { name: DIRECTORA, role: "Directora Técnica" },
+    ],
+    vars: {
+      directora: DIRECTORA,
+      docente: "",
+      secretario: SECRETARIO,
+      promocion: "",
+      cohorte_letras: "",
+    },
+  },
+];
+
+async function seedTemplates() {
+  for (const t of TEMPLATES) {
+    const exists = await prisma.actaTemplate.findFirst({ where: { name: t.name } });
+    if (exists) {
+      console.log(`✔ Plantilla ya existe: ${t.name}`);
+      continue;
+    }
+    await prisma.actaTemplate.create({
+      data: {
+        name: t.name,
+        title: t.title,
+        body: t.body,
+        block: t.block,
+        columns: t.columns,
+        signers: t.signers,
+        vars: t.vars,
+      },
+    });
+    console.log(`✔ Plantilla creada: ${t.name}`);
+  }
+}
+
+async function main() {
+  await seedAdmin();
+  await seedTemplates();
 }
 
 main()
