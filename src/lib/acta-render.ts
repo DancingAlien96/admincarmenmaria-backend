@@ -134,8 +134,12 @@ export function renderActaPDF(d: ActaRenderInput): Promise<Buffer> {
       }
     }
 
-    // --- Firmas ---
-    renderSigners(doc, left, right, width, d.signers ?? []);
+    // --- Firmas (el sello depende de la sede) ---
+    const isIzabal = /izabal|morales/i.test(
+      `${d.department ?? ""} ${d.city ?? ""}`
+    );
+    const sealAsset = isIzabal ? "sello-izabal.png" : "sello-trim.png";
+    renderSigners(doc, left, right, width, d.signers ?? [], sealAsset);
 
     doc.end();
   });
@@ -218,7 +222,8 @@ function renderSigners(
   left: number,
   right: number,
   width: number,
-  signers: ActaSigner[]
+  signers: ActaSigner[],
+  sealAsset: string
 ) {
   if (signers.length === 0) return;
 
@@ -239,9 +244,9 @@ function renderSigners(
   } catch {
     /* sin firma */
   }
-  // Sello a la derecha (mismo tamaño que la constancia).
+  // Sello a la derecha (según la sede; mismo tamaño que la constancia).
   try {
-    doc.image(asset("sello-trim.png"), right - 135, signY - 18, { width: 130 });
+    doc.image(asset(sealAsset), right - 135, signY - 18, { width: 130 });
   } catch {
     /* sin sello */
   }
