@@ -50,36 +50,54 @@ SÉPTIMO: El Secretario procede a dejar establecido el grupo oficial para la coh
 
 Y PARA REMITIR A DONDE CORRESPONDE, SE EXTIENDE LA PRESENTE EN PAPEL BOND MEMBRETADO, EL {{FECHA_CIERRE_LETRAS}}.`;
 
+// Misma acta, distinta sede: en Izabal cambia la fecha de autorizacion del libro.
+const AUT_CHIQ_CALIF = "veinte de enero del año dos mil diecisiete (20/01/2017)";
+const AUT_CHIQ_INAUG = "veinte de febrero del año dos mil diecisiete (20/02/2017)";
+const AUT_IZABAL = "once de septiembre del año dos mil veintitrés (11/09/2023)";
+const CALIF_BODY_IZABAL = CALIF_BODY.replace(AUT_CHIQ_CALIF, AUT_IZABAL);
+const INAUG_BODY_IZABAL = INAUG_BODY.replace(AUT_CHIQ_INAUG, AUT_IZABAL);
+
+const calizSigners = [
+  { name: SECRETARIO, role: "Secretario" },
+  { name: DIRECTORA, role: "Directora Técnica" },
+];
+
 const TEMPLATES = [
   {
-    name: "Calificaciones",
+    name: "Calificaciones (Chiquimula)",
     title: "Acta de Calificaciones",
     body: CALIF_BODY,
     block: "tabla",
     columns: ["NO.", "NOMBRE DEL ALUMNO", "Nota Obtenida"],
-    signers: [
-      { name: SECRETARIO, role: "Secretario" },
-      { name: DIRECTORA, role: "Directora Técnica" },
-    ],
+    signers: calizSigners,
     vars: { directora: DIRECTORA, secretario: SECRETARIO, fase: "Fase I" },
   },
   {
-    name: "Inauguración",
+    name: "Inauguración (Chiquimula)",
     title: "Acta de Inauguración",
     body: INAUG_BODY,
     block: "lista",
     columns: ["NO.", "NOMBRE DEL ALUMNO"],
-    signers: [
-      { name: SECRETARIO, role: "Secretario" },
-      { name: DIRECTORA, role: "Directora Técnica" },
-    ],
-    vars: {
-      directora: DIRECTORA,
-      docente: "",
-      secretario: SECRETARIO,
-      promocion: "",
-      cohorte_letras: "",
-    },
+    signers: calizSigners,
+    vars: { directora: DIRECTORA, docente: "", secretario: SECRETARIO, promocion: "", cohorte_letras: "" },
+  },
+  {
+    name: "Calificaciones (Morales Izabal)",
+    title: "Acta de Calificaciones",
+    body: CALIF_BODY_IZABAL,
+    block: "tabla",
+    columns: ["NO.", "NOMBRE DEL ALUMNO", "Nota Obtenida"],
+    signers: calizSigners,
+    vars: { directora: DIRECTORA, secretario: SECRETARIO, fase: "Fase I" },
+  },
+  {
+    name: "Inauguración (Morales Izabal)",
+    title: "Acta de Inauguración",
+    body: INAUG_BODY_IZABAL,
+    block: "lista",
+    columns: ["NO.", "NOMBRE DEL ALUMNO"],
+    signers: calizSigners,
+    vars: { directora: DIRECTORA, docente: "", secretario: SECRETARIO, promocion: "", cohorte_letras: "" },
   },
 ];
 

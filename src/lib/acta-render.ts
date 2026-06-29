@@ -213,33 +213,45 @@ function renderSigners(
   if (signers.length === 0) return;
 
   // Bloque que no se parte entre páginas.
-  if (doc.y + 150 > doc.page.height - doc.page.margins.bottom) {
+  if (doc.y + 200 > doc.page.height - doc.page.margins.bottom) {
     doc.addPage();
     doc.y = doc.page.margins.top;
   }
   const signY = doc.y + 55;
+  const firmaW = 150;
 
-  // Firma + sello sobre el primer firmante.
+  // Firma centrada, arriba del nombre del primer firmante (mismo espaciado
+  // que la constancia: ~80px entre la firma y el nombre).
   try {
-    doc.image(asset("firma.png"), left + 20, signY - 35, { width: 120 });
+    doc.image(asset("firma.png"), left + (width - firmaW) / 2, signY - 10, {
+      width: firmaW,
+    });
   } catch {
     /* sin firma */
   }
+  // Sello a la derecha (mismo tamaño que la constancia).
   try {
-    doc.image(asset("sello-trim.png"), right - 135, signY - 40, { width: 125 });
+    doc.image(asset("sello-trim.png"), right - 135, signY - 18, { width: 130 });
   } catch {
     /* sin sello */
   }
 
-  doc.font("Helvetica").fontSize(11).fillColor("#111111");
-  doc.text(signers[0].name, left, signY, { width: 250 });
-  doc.text(signers[0].role, left, signY + 14, { width: 250 });
+  // Primer firmante: nombre (negrita) + cargo, centrados bajo la firma.
+  doc.fillColor("#111111").font("Helvetica-Bold").fontSize(11);
+  doc.text(signers[0].name, left, signY + 70, { width, align: "center" });
+  doc.font("Helvetica").text(signers[0].role, left, signY + 84, {
+    width,
+    align: "center",
+  });
 
-  // Firmantes adicionales: Vo.Bo. debajo.
-  let yy = signY + 60;
+  // Firmantes adicionales: Vo.Bo. centrados debajo.
+  let yy = signY + 116;
   for (const s of signers.slice(1)) {
-    doc.text(`Vo.Bo. ${s.name}`, left, yy, { width });
-    doc.text(s.role, left, yy + 14, { width });
-    yy += 50;
+    doc.font("Helvetica-Bold").text(`Vo.Bo. ${s.name}`, left, yy, {
+      width,
+      align: "center",
+    });
+    doc.font("Helvetica").text(s.role, left, yy + 14, { width, align: "center" });
+    yy += 46;
   }
 }
