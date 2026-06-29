@@ -17,7 +17,8 @@ export interface ActaSigner {
 }
 export interface ActaRow {
   name: string;
-  value?: string | null;
+  value?: string | null; // compatibilidad: equivale a values[0]
+  values?: (string | null)[]; // varias columnas de notas (Teoria/Practica/Nota)
 }
 export interface ActaRenderInput {
   actaNumber: string;
@@ -154,24 +155,29 @@ function renderTable(
   const cols = d.columns ?? [];
   const noLabel = cols[0] ?? "NO.";
   const nameLabel = cols[1] ?? "NOMBRE DEL ALUMNO";
-  const valueLabel = cols[2] ?? "Nota Obtenida";
-  const hasValue = !onlyNames;
+  // Columnas de notas = las que siguen al No. y al Nombre.
+  const valueLabels = onlyNames
+    ? []
+    : cols.length > 2
+      ? cols.slice(2)
+      : ["Nota Obtenida"];
+  const numValues = valueLabels.length;
 
   const rowH = 20;
   const noW = 40;
-  const valueW = hasValue ? 100 : 0;
-  const nameW = width - noW - valueW;
+  const valueW = numValues > 0 ? Math.min(95, Math.max(55, 300 / numValues)) : 0;
+  const valuesTotal = valueW * numValues;
+  const nameW = width - noW - valuesTotal;
+  const valueX = (i: number) => left + noW + nameW + i * valueW;
 
   function header(y: number) {
     doc.rect(left, y, width, rowH).fill(BRAND);
-    doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(10);
+    doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(9);
     doc.text(noLabel, left + 6, y + 6, { width: noW - 8 });
     doc.text(nameLabel, left + noW + 6, y + 6, { width: nameW - 8 });
-    if (hasValue)
-      doc.text(valueLabel, left + noW + nameW, y + 6, {
-        width: valueW,
-        align: "center",
-      });
+    valueLabels.forEach((lbl, i) =>
+      doc.text(lbl, valueX(i), y + 6, { width: valueW, align: "center" })
+    );
   }
 
   doc.moveDown(0.2);
@@ -186,18 +192,22 @@ function renderTable(
       header(y);
       y += rowH;
     }
-    doc.rect(left, y, noW, rowH).strokeColor("#cccccc").lineWidth(0.5).stroke();
-    doc.rect(left + noW, y, nameW, rowH).strokeColor("#cccccc").lineWidth(0.5).stroke();
-    if (hasValue)
-      doc.rect(left + noW + nameW, y, valueW, rowH).strokeColor("#cccccc").lineWidth(0.5).stroke();
+    const cell = (x: number, w: number) =>
+      doc.rect(x, y, w, rowH).strokeColor("#cccccc").lineWidth(0.5).stroke();
+    cell(left, noW);
+    cell(left + noW, nameW);
+    for (let c = 0; c < numValues; c++) cell(valueX(c), valueW);
     doc.fillColor("#111111").font("Helvetica").fontSize(10);
     doc.text(String(i + 1), left + 6, y + 6, { width: noW - 8 });
     doc.text(r.name, left + noW + 6, y + 6, { width: nameW - 12 });
-    if (hasValue)
-      doc.text(r.value ?? "", left + noW + nameW, y + 6, {
+    // valores: usa r.values[] o, si no, r.value en la primera columna.
+    const vals = r.values ?? (r.value != null ? [r.value] : []);
+    for (let c = 0; c < numValues; c++) {
+      doc.text(vals[c] ?? "", valueX(c), y + 6, {
         width: valueW,
         align: "center",
       });
+    }
     y += rowH;
   });
   doc.y = y + 12;

@@ -3,6 +3,7 @@ import { z } from "zod";
 const rowSchema = z.object({
   name: z.string().trim().min(1, "Nombre requerido"),
   value: z.string().trim().optional().nullable(),
+  values: z.array(z.string().nullable()).optional(),
 });
 
 const signerSchema = z.object({

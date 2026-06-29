@@ -50,16 +50,35 @@ SÉPTIMO: El Secretario procede a dejar establecido el grupo oficial para la coh
 
 Y PARA REMITIR A DONDE CORRESPONDE, SE EXTIENDE LA PRESENTE EN PAPEL BOND MEMBRETADO, EL {{FECHA_CIERRE_LETRAS}}.`;
 
-// Misma acta, distinta sede: en Izabal cambia la fecha de autorizacion del libro.
-const AUT_CHIQ_CALIF = "veinte de enero del año dos mil diecisiete (20/01/2017)";
+// --- Sede Morales Izabal: distinto lugar, nombre "de Izabal", fecha de
+// autorizacion del libro (11/09/2023), directora propia y tabla con
+// Teoria/Practica/Nota en calificaciones.
+const DIRECTORA_IZABAL = "Licda. Jazmyn Lizeth Duarte Monzón";
 const AUT_CHIQ_INAUG = "veinte de febrero del año dos mil diecisiete (20/02/2017)";
 const AUT_IZABAL = "once de septiembre del año dos mil veintitrés (11/09/2023)";
-const CALIF_BODY_IZABAL = CALIF_BODY.replace(AUT_CHIQ_CALIF, AUT_IZABAL);
-const INAUG_BODY_IZABAL = INAUG_BODY.replace(AUT_CHIQ_INAUG, AUT_IZABAL);
 
-const calizSigners = [
+const CALIF_BODY_IZABAL = `El infrascrito Secretario de la Escuela Privada de auxiliares de Enfermería "CARMEN MARÍA" CERTIFICA: Haber tenido a la vista el Libro de Registro de Calificaciones autorizado por el Departamento de Formación y Educación en Salud del Ministerio de Salud Pública y Asistencia Social de fecha ${AUT_IZABAL} en el que a folios números {{folios}} se encuentra el Acta número {{numero}}, que transcrita literalmente dice: --------------------------------------------------
+
+Acta {{numero}}. En Aldea Benque el Amatillo, Municipio de Morales, Departamento de Izabal, siendo las {{hora_letras}} en punto del día {{fecha_letras}}, estando reunidos en oficinas administrativas de la Escuela Privada de Auxiliares de Enfermería Carmen María de Izabal, las siguientes personas: {{directora}}, Directora Técnica y quien suscribe la presente, {{secretario}}, Secretario, dejando constancia de lo siguiente. PRIMERO. {{directora}}, Directora Técnica procede a realizar la entrega del consolidado de notas de teoría y práctica correspondiente a la {{fase}}. SEGUNDO: {{secretario}} procede a registrar las notas obtenidas en dicha fase, siendo estas las siguientes:
+
+{{tabla}}
+
+TERCERO. No habiendo más que hacer constar se da por finalizada la presente acta, en el mismo lugar y fecha, siendo las {{hora_cierre_letras}}. Damos fe los que en ella intervenimos.
+
+Y PARA REMITIR A DONDE CORRESPONDE, SE EXTIENDE LA PRESENTE EN PAPEL BOND MEMBRETADO, EL DÍA {{FECHA_CIERRE_LETRAS}}.`;
+
+const INAUG_BODY_IZABAL = INAUG_BODY
+  .replace(AUT_CHIQ_INAUG, AUT_IZABAL)
+  .replace('Enfermería "Carmen María", doce avenida tercera calle, segundo nivel edificio Veredita',
+    "Enfermería Carmen María de Izabal, Aldea Benque el Amatillo, Municipio de Morales, Departamento de Izabal");
+
+const signersChiq = [
   { name: SECRETARIO, role: "Secretario" },
   { name: DIRECTORA, role: "Directora Técnica" },
+];
+const signersIzabal = [
+  { name: SECRETARIO, role: "Secretario" },
+  { name: DIRECTORA_IZABAL, role: "Directora Técnica" },
 ];
 
 const TEMPLATES = [
@@ -69,7 +88,7 @@ const TEMPLATES = [
     body: CALIF_BODY,
     block: "tabla",
     columns: ["NO.", "NOMBRE DEL ALUMNO", "Nota Obtenida"],
-    signers: calizSigners,
+    signers: signersChiq,
     vars: { directora: DIRECTORA, secretario: SECRETARIO, fase: "Fase I" },
   },
   {
@@ -78,7 +97,7 @@ const TEMPLATES = [
     body: INAUG_BODY,
     block: "lista",
     columns: ["NO.", "NOMBRE DEL ALUMNO"],
-    signers: calizSigners,
+    signers: signersChiq,
     vars: { directora: DIRECTORA, docente: "", secretario: SECRETARIO, promocion: "", cohorte_letras: "" },
   },
   {
@@ -86,9 +105,9 @@ const TEMPLATES = [
     title: "Acta de Calificaciones",
     body: CALIF_BODY_IZABAL,
     block: "tabla",
-    columns: ["NO.", "NOMBRE DEL ALUMNO", "Nota Obtenida"],
-    signers: calizSigners,
-    vars: { directora: DIRECTORA, secretario: SECRETARIO, fase: "Fase I" },
+    columns: ["NO.", "NOMBRE DEL ALUMNO", "Teoría", "Práctica", "Nota Obtenida"],
+    signers: signersIzabal,
+    vars: { directora: DIRECTORA_IZABAL, secretario: SECRETARIO, fase: 'Fase II "Atención integral de enfermería a las personas en situación médico quirúrgico en las diferentes etapas de la vida"' },
   },
   {
     name: "Inauguración (Morales Izabal)",
@@ -96,8 +115,8 @@ const TEMPLATES = [
     body: INAUG_BODY_IZABAL,
     block: "lista",
     columns: ["NO.", "NOMBRE DEL ALUMNO"],
-    signers: calizSigners,
-    vars: { directora: DIRECTORA, docente: "", secretario: SECRETARIO, promocion: "", cohorte_letras: "" },
+    signers: signersIzabal,
+    vars: { directora: DIRECTORA_IZABAL, docente: "", secretario: SECRETARIO, promocion: "", cohorte_letras: "" },
   },
 ];
 

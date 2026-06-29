@@ -171,7 +171,12 @@ export function buildRenderInput(acta: {
     body: acta.body,
     vars: (acta.vars as Record<string, string>) ?? {},
     columns: (acta.columns as string[]) ?? [],
-    rows: (acta.rows as { name: string; value?: string | null }[]) ?? [],
+    rows:
+      (acta.rows as {
+        name: string;
+        value?: string | null;
+        values?: (string | null)[];
+      }[]) ?? [],
     signers: (acta.signers as { name: string; role: string }[]) ?? [],
   };
 }
