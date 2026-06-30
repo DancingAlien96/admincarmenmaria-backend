@@ -91,9 +91,9 @@ export function renderActaPDF(d: ActaRenderInput): Promise<Buffer> {
     const right = doc.page.width - doc.page.margins.right;
     const width = right - left;
 
-    // --- Membrete: logo centrado ---
+    // --- Membrete: logo pegado a la izquierda ---
     try {
-      doc.image(asset("logo.png"), (doc.page.width - 90) / 2, 40, { width: 90 });
+      doc.image(asset("logo.png"), left, 40, { width: 90 });
     } catch {
       /* sin logo */
     }
@@ -244,35 +244,34 @@ function renderSigners(
     doc.y = doc.page.margins.top;
   }
   const firmaW = 150;
+  const nameW = 280; // ancho para alinear el nombre/cargo a la izquierda
   let blockY = doc.y + 55;
 
   signers.forEach((s, i) => {
-    // Firma manuscrita centrada sobre el nombre (si hay una para este firmante).
+    // Firma manuscrita sobre el nombre, pegada a la izquierda.
     const sigAsset = signatureFor(s.name);
     if (sigAsset) {
       try {
-        doc.image(asset(sigAsset), left + (width - firmaW) / 2, blockY - 10, {
-          width: firmaW,
-        });
+        doc.image(asset(sigAsset), left, blockY - 10, { width: firmaW });
       } catch {
         /* sin firma */
       }
     }
-    // El sello va a la derecha, al nivel del primer firmante.
+    // El sello va a la derecha, al nivel del primer firmante (más pequeño).
     if (i === 0) {
       try {
-        doc.image(asset(sealAsset), right - 135, blockY - 18, { width: 130 });
+        doc.image(asset(sealAsset), right - 105, blockY - 8, { width: 100 });
       } catch {
         /* sin sello */
       }
     }
-    // Nombre (negrita) + cargo, centrados. Los firmantes 2+ llevan "Vo.Bo.".
+    // Nombre (negrita) + cargo, alineados a la izquierda. 2+ llevan "Vo.Bo.".
     const label = i === 0 ? s.name : `Vo.Bo. ${s.name}`;
     doc.fillColor("#111111").font("Helvetica-Bold").fontSize(11);
-    doc.text(label, left, blockY + 60, { width, align: "center" });
+    doc.text(label, left, blockY + 60, { width: nameW, align: "left" });
     doc.font("Helvetica").text(s.role, left, blockY + 74, {
-      width,
-      align: "center",
+      width: nameW,
+      align: "left",
     });
     blockY += 130;
   });
