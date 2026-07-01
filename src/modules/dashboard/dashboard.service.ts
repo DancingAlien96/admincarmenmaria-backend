@@ -209,6 +209,7 @@ export async function getOverview() {
     studentsBySedeRows,
     enrollmentsBySedeRows,
     incomePayments,
+    studentsByMuniRows,
   ] = await Promise.all([
     prisma.student.groupBy({ by: ["status"], _count: true }),
     prisma.graduate.count(),
@@ -260,6 +261,12 @@ export async function getOverview() {
         sede: true,
         student: { select: { sede: true } },
       },
+    }),
+    // Estudiantes por municipio (para el mapa)
+    prisma.student.groupBy({
+      by: ["department", "municipality"],
+      where: { archived: false },
+      _count: true,
     }),
   ]);
 
@@ -315,6 +322,24 @@ export async function getOverview() {
     .map(([sede, v]) => ({ sede, total: v.total, count: v.count }))
     .sort((a, b) => b.total - a.total);
 
+  // Estudiantes por municipio (para el mapa). Los que no tienen municipio
+  // registrado se cuentan aparte (sin ubicación).
+  let studentsWithoutLocation = 0;
+  const studentsByMunicipality = studentsByMuniRows
+    .map((r) => ({
+      department: (r.department ?? "").trim(),
+      municipality: (r.municipality ?? "").trim(),
+      count: r._count,
+    }))
+    .filter((r) => {
+      if (!r.municipality) {
+        studentsWithoutLocation += r.count;
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => b.count - a.count);
+
   return {
     year: now.getFullYear(),
     students: { total: studentsTotal, byStatus: statusCounts },
@@ -336,6 +361,8 @@ export async function getOverview() {
     studentsBySede,
     enrollmentsBySede,
     incomeBySede,
+    studentsByMunicipality,
+    studentsWithoutLocation,
   };
 }
 
