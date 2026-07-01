@@ -577,3 +577,21 @@ model TeacherDocument {
 // calificaciones. Guarda los datos variables + la lista de alumnos (snapshot).
 // ----------------------------------------------------------------------------
 
+
+// ----------------------------------------------------------------------------
+// Firmas del personal (catalogo administrable desde el panel). Cada acta
+// congela la firma con la que se emitio (guarda su key en los signers).
+// ----------------------------------------------------------------------------
+model Signatory {
+  id           String   @id @default(cuid())
+  name         String // ej. "Lic. Héctor Manuel Sarmiento Reyes"
+  role         String // ej. "Secretario", "Directora Técnica"
+  sede         String? // opcional: Chiquimula / Morales Izabal
+  signatureKey String // archivo de la firma en /uploads
+  signatureUrl String   @db.Text
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([active])
+}

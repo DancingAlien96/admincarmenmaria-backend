@@ -69,6 +69,32 @@ export async function storeFile(
   };
 }
 
+// Guarda una imagen de firma: recorta el margen en blanco y la deja en PNG
+// con fondo blanco (para estamparla sobre el acta). No la recomprime a JPEG.
+export async function storeSignature(
+  buffer: Buffer,
+  originalName: string
+): Promise<StoredFile> {
+  await ensureUploadDir();
+  const id = crypto.randomBytes(16).toString("hex");
+  const key = `firma-${id}.png`;
+
+  const out = await sharp(buffer)
+    .flatten({ background: "#ffffff" })
+    .trim({ threshold: 40 })
+    .resize({ width: 900, height: 500, fit: "inside", withoutEnlargement: true })
+    .png()
+    .toBuffer();
+
+  await fs.writeFile(path.join(UPLOAD_ROOT, key), out);
+  return {
+    key,
+    url: `${env.PUBLIC_API_URL}/uploads/${key}`,
+    name: originalName,
+    size: out.length,
+  };
+}
+
 // Borra un archivo del disco por su key. No falla si ya no existe.
 export async function deleteFile(key: string | null | undefined): Promise<void> {
   if (!key) return;

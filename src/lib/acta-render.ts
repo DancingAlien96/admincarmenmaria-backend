@@ -6,6 +6,7 @@ import {
   dateInWords,
   dateShort,
 } from "./date-words.js";
+import { UPLOAD_ROOT } from "./storage.js";
 
 const BRAND = "#16314f";
 const ASSETS_DIR = path.resolve(process.cwd(), "assets");
@@ -14,6 +15,7 @@ const asset = (name: string) => path.join(ASSETS_DIR, name);
 export interface ActaSigner {
   name: string;
   role: string;
+  signatureKey?: string | null; // firma congelada del acta (en /uploads)
 }
 export interface ActaRow {
   name: string;
@@ -249,10 +251,15 @@ function renderSigners(
 
   signers.forEach((s, i) => {
     // Firma manuscrita sobre el nombre, pegada a la izquierda.
-    const sigAsset = signatureFor(s.name);
-    if (sigAsset) {
+    // Prioridad: la firma congelada del acta (uploads); si no, el mapa base.
+    const sigPath = s.signatureKey
+      ? path.join(UPLOAD_ROOT, path.basename(s.signatureKey))
+      : signatureFor(s.name)
+        ? asset(signatureFor(s.name)!)
+        : null;
+    if (sigPath) {
       try {
-        doc.image(asset(sigAsset), left, blockY - 10, { width: firmaW });
+        doc.image(sigPath, left, blockY - 10, { width: firmaW });
       } catch {
         /* sin firma */
       }

@@ -142,9 +142,50 @@ async function seedTemplates() {
   }
 }
 
+// Migra las firmas base (que estaban en /assets) al catálogo administrable,
+// para que aparezcan en el selector de firmantes. Idempotente por nombre.
+async function seedSignatories() {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const { storeSignature } = await import("./lib/storage.js");
+  const base = [
+    { name: SECRETARIO, role: "Secretario", sede: null, asset: "firma.png" },
+    {
+      name: DIRECTORA_IZABAL,
+      role: "Directora Técnica",
+      sede: "Morales Izabal",
+      asset: "firma-izabal.png",
+    },
+  ];
+  for (const s of base) {
+    const exists = await prisma.signatory.findFirst({ where: { name: s.name } });
+    if (exists) {
+      console.log(`✔ Firma ya existe: ${s.name}`);
+      continue;
+    }
+    const file = path.resolve(process.cwd(), "assets", s.asset);
+    if (!fs.existsSync(file)) {
+      console.log(`… sin asset para ${s.name} (${s.asset})`);
+      continue;
+    }
+    const stored = await storeSignature(fs.readFileSync(file), s.asset);
+    await prisma.signatory.create({
+      data: {
+        name: s.name,
+        role: s.role,
+        sede: s.sede,
+        signatureKey: stored.key,
+        signatureUrl: stored.url,
+      },
+    });
+    console.log(`✔ Firma creada: ${s.name}`);
+  }
+}
+
 async function main() {
   await seedAdmin();
   await seedTemplates();
+  await seedSignatories();
 }
 
 main()

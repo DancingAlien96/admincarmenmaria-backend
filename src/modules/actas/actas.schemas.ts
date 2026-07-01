@@ -9,6 +9,8 @@ const rowSchema = z.object({
 const signerSchema = z.object({
   name: z.string().trim().min(1, "Nombre del firmante requerido"),
   role: z.string().trim().min(1, "Cargo del firmante requerido"),
+  // Firma congelada (key en /uploads) copiada del catálogo al crear el acta.
+  signatureKey: z.string().trim().optional().nullable(),
 });
 
 export const createActaSchema = z.object({
