@@ -19,6 +19,8 @@ export interface ReportTable {
   columns: string[];
   rows: (string | number)[][];
   totals?: (string | number)[]; // fila de totales opcional
+  widths?: number[]; // pesos relativos por columna (opcional)
+  align?: ("left" | "right")[]; // alineación por columna (opcional)
 }
 export interface ReportData {
   title: string; // ej. "Cobranza General"
@@ -132,18 +134,39 @@ function renderPdfTable(
     doc.moveDown(0.2);
   }
   const nCols = table.columns.length;
-  const colW = width / nCols;
   const rowH = 18;
+
+  // Anchos de columna proporcionales (peso opcional; por defecto iguales).
+  const weights =
+    table.widths && table.widths.length === nCols
+      ? table.widths
+      : table.columns.map(() => 1);
+  const sumW = weights.reduce((a, b) => a + b, 0);
+  const colW = weights.map((w) => (w / sumW) * width);
+  const colX: number[] = [];
+  let acc = left;
+  for (const w of colW) {
+    colX.push(acc);
+    acc += w;
+  }
+  // Alineación: la indicada, o izquierda (1ª) y derecha (resto) por defecto.
+  const alignOf = (i: number): "left" | "right" =>
+    table.align?.[i] ?? (i === 0 ? "left" : "right");
+
+  // Escribe una celda en una sola línea, truncando con "…" si no cabe.
+  const cell = (text: string, i: number, y: number) =>
+    doc.text(text, colX[i]! + 5, y + 5, {
+      width: colW[i]! - 8,
+      align: alignOf(i),
+      height: rowH - 6,
+      ellipsis: true,
+      lineBreak: false,
+    });
 
   const header = (y: number) => {
     doc.rect(left, y, width, rowH).fill(BRAND);
     doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(8.5);
-    table.columns.forEach((c, i) =>
-      doc.text(c, left + i * colW + 5, y + 5, {
-        width: colW - 8,
-        align: i === 0 ? "left" : "right",
-      })
-    );
+    table.columns.forEach((c, i) => cell(c, i, y));
   };
 
   let y = doc.y;
@@ -159,12 +182,7 @@ function renderPdfTable(
     }
     doc.rect(left, y, width, rowH).strokeColor("#eeeeee").lineWidth(0.5).stroke();
     doc.fillColor("#111111").font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(8.5);
-    cells.forEach((c, i) =>
-      doc.text(String(c), left + i * colW + 5, y + 5, {
-        width: colW - 8,
-        align: i === 0 ? "left" : "right",
-      })
-    );
+    cells.forEach((c, i) => cell(String(c), i, y));
     y += rowH;
   };
 

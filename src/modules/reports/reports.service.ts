@@ -159,6 +159,8 @@ async function buildMora(f: ReportFilters): Promise<ReportData> {
       {
         title: `Estudiantes que no han pagado ${mora.label}`,
         columns: ["Estudiante", "Sede", "Municipio"],
+        widths: [3, 1.6, 2],
+        align: ["left", "left", "left"],
         rows: list.map((s) => [
           s.fullName,
           s.sede ?? "—",
@@ -203,6 +205,8 @@ async function buildEstudiantes(f: ReportFilters): Promise<ReportData> {
     tables: [
       {
         columns: ["Nombre", "DPI", "Sede", "Estado", "Teléfono", "Inscrito"],
+        widths: [3.2, 2.2, 2, 1.4, 1.7, 1.5],
+        align: ["left", "left", "left", "left", "left", "left"],
         rows: rows.map((r) => [
           r.fullName,
           r.dpi ?? "—",
@@ -241,6 +245,8 @@ async function buildEgresados(f: ReportFilters): Promise<ReportData> {
     tables: [
       {
         columns: ["Nombre", "DPI", "No. Diploma", "Código MSPAS", "Graduación"],
+        widths: [3.2, 2.2, 2, 2, 1.6],
+        align: ["left", "left", "left", "left", "left"],
         rows: rows.map((r) => [
           r.fullName,
           r.dpi ?? "—",
