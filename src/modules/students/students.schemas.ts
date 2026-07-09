@@ -46,6 +46,7 @@ export const updateStudentSchema = createStudentSchema.partial();
 export const listStudentsQuery = z.object({
   search: z.string().trim().optional(),
   status: z.enum(STATUS).optional(),
+  sede: z.string().trim().optional(),
   // Año de inscripcion (ciclo escolar)
   year: z.coerce.number().int().min(2000).max(2100).optional(),
   archived: z

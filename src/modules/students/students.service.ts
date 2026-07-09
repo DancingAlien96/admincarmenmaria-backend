@@ -19,6 +19,7 @@ export async function listStudents(q: ListStudentsQuery) {
   const where: Prisma.StudentWhereInput = {
     archived: q.archived ?? false,
     ...(q.status ? { status: q.status } : {}),
+    ...(q.sede ? { sede: q.sede } : {}),
     ...(q.year
       ? {
           enrollmentDate: {
@@ -49,6 +50,7 @@ export async function listStudents(q: ListStudentsQuery) {
         fullName: true,
         dpi: true,
         status: true,
+        sede: true,
         phonePrimary: true,
         enrollmentDate: true,
         _count: { select: { documents: true } },
