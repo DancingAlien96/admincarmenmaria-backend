@@ -203,7 +203,7 @@ export async function getOverview() {
     expenseYearAgg,
     paymentsBySource,
     monthlyPayments,
-    overdueCharges,
+    moraNow,
     actasTotal,
     waOutbound,
     studentsBySedeRows,
@@ -231,10 +231,8 @@ export async function getOverview() {
       where: { status: "ACTIVO", paidAt: { gte: yearStart, lte: yearEnd } },
       select: { paidAt: true, amount: true, discount: true },
     }),
-    prisma.charge.findMany({
-      where: { status: "PENDIENTE", dueDate: { lt: now } },
-      select: { id: true, amount: true },
-    }),
+    // Mora = estudiantes de la cohorte actual sin mensualidad del mes en curso
+    getMoraStudents(),
     prisma.acta.count(),
     prisma.whatsappMessage.count({ where: { direction: "OUTBOUND" } }),
     // Estudiantes por sede (no archivados)
@@ -292,8 +290,8 @@ export async function getOverview() {
     monthly[m]!.income += Number(p.amount) - Number(p.discount);
   }
 
-  // Mora total
-  const moraTotal = overdueCharges.reduce((s, c) => s + Number(c.amount), 0);
+  // Mora = cantidad de estudiantes (cohorte actual) sin la mensualidad del mes.
+  const moraCount = moraNow.pending;
 
   // --- Demografia por sede ---
   const SIN_SEDE = "Sin especificar";
@@ -349,7 +347,8 @@ export async function getOverview() {
       incomeYear,
       expenseYear,
       balanceYear: incomeYear - expenseYear,
-      moraTotal,
+      moraCount,
+      moraLabel: moraNow.label,
     },
     paymentsBySource: paymentsBySource.map((s) => ({
       source: s.source,
@@ -375,7 +374,17 @@ const MONTHS_FULL = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
-export async function getMonthlyPaymentStatus(monthStr?: string) {
+export interface MoraStudent {
+  id: string;
+  fullName: string;
+  sede: string | null;
+  department: string | null;
+  municipality: string | null;
+}
+
+// Estudiantes en mora de un mes: los de la cohorte del año en curso, ya
+// inscritos, que NO pagaron su mensualidad ese mes. Devuelve conteos + lista.
+export async function getMoraStudents(monthStr?: string) {
   const now = new Date();
   let y = now.getFullYear();
   let m = now.getMonth();
@@ -388,16 +397,20 @@ export async function getMonthlyPaymentStatus(monthStr?: string) {
   const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
   const yearStart = new Date(y, 0, 1); // solo la cohorte del año en curso
 
-  // Estudiantes activos del AÑO en curso, ya inscritos en/antes de ese mes.
   const eligible = await prisma.student.findMany({
     where: {
       archived: false,
       status: "ACTIVO",
       enrollmentDate: { gte: yearStart, lte: end },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      fullName: true,
+      sede: true,
+      department: true,
+      municipality: true,
+    },
   });
-  const eligibleIds = new Set(eligible.map((s) => s.id));
 
   // Pagos de mensualidad (concepto contiene "mensual") de ese mes.
   const pays = await prisma.payment.findMany({
@@ -409,19 +422,27 @@ export async function getMonthlyPaymentStatus(monthStr?: string) {
     },
     select: { studentId: true },
   });
-  const paidSet = new Set<string>();
-  for (const p of pays) {
-    if (p.studentId && eligibleIds.has(p.studentId)) paidSet.add(p.studentId);
-  }
+  const paidSet = new Set(pays.map((p) => p.studentId));
 
-  const total = eligibleIds.size;
-  const paid = paidSet.size;
+  const enMora = eligible.filter((s) => !paidSet.has(s.id));
   return {
     month: `${y}-${String(m + 1).padStart(2, "0")}`,
     label: `${MONTHS_FULL[m]} ${y}`,
-    total,
-    paid,
-    pending: Math.max(0, total - paid),
+    total: eligible.length,
+    paid: eligible.length - enMora.length,
+    pending: enMora.length,
+    students: enMora as MoraStudent[],
+  };
+}
+
+export async function getMonthlyPaymentStatus(monthStr?: string) {
+  const r = await getMoraStudents(monthStr);
+  return {
+    month: r.month,
+    label: r.label,
+    total: r.total,
+    paid: r.paid,
+    pending: r.pending,
   };
 }
 

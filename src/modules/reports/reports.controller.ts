@@ -11,6 +11,7 @@ export async function reportController(req: Request, res: Response) {
     sede: q.sede,
     status: q.status,
     year: q.year,
+    month: q.month,
   };
   const data = await buildReport(q.type, filters);
 

@@ -9,6 +9,10 @@ export const reportQuery = z.object({
   sede: z.string().trim().optional(),
   status: z.enum(["ACTIVO", "EGRESADO", "BAJA"]).optional(),
   year: z.coerce.number().int().min(2000).max(2100).optional(),
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
 });
 
 export type ReportQuery = z.infer<typeof reportQuery>;

@@ -1,5 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
-import { paidByCharge } from "../charges/charges.service.js";
+import { getMoraStudents } from "../dashboard/dashboard.service.js";
 import type { ReportData } from "../../lib/report-render.js";
 
 export const REPORT_TYPES = [
@@ -18,6 +18,7 @@ export interface ReportFilters {
   sede?: string;
   status?: "ACTIVO" | "EGRESADO" | "BAJA";
   year?: number;
+  month?: string; // "YYYY-MM" para el reporte de mora
 }
 
 const MESES = [
@@ -38,40 +39,6 @@ function period(f: ReportFilters): { from: Date; to: Date; label: string } {
   return { from, to, label: `${dfmt(from)} — ${dfmt(to)}` };
 }
 
-// ---- Mora (cargos pendientes vencidos) agrupada por estudiante --------------
-async function moraByStudent() {
-  const now = new Date();
-  const overdue = await prisma.charge.findMany({
-    where: { status: "PENDIENTE", dueDate: { lt: now } },
-    select: {
-      id: true,
-      amount: true,
-      dueDate: true,
-      student: { select: { id: true, fullName: true, sede: true } },
-    },
-  });
-  const paid = await paidByCharge(overdue.map((c) => c.id));
-  const map = new Map<
-    string,
-    { name: string; sede: string; saldo: number; cargos: number }
-  >();
-  for (const c of overdue) {
-    const saldo = Number(c.amount) - (paid.get(c.id) ?? 0);
-    if (saldo <= 0) continue;
-    const key = c.student.id;
-    const cur = map.get(key) ?? {
-      name: c.student.fullName,
-      sede: c.student.sede ?? SIN_SEDE,
-      saldo: 0,
-      cargos: 0,
-    };
-    cur.saldo += saldo;
-    cur.cargos += 1;
-    map.set(key, cur);
-  }
-  return [...map.values()].sort((a, b) => b.saldo - a.saldo);
-}
-
 // ---- Builders ---------------------------------------------------------------
 
 async function buildResumen(f: ReportFilters): Promise<ReportData> {
@@ -87,13 +54,12 @@ async function buildResumen(f: ReportFilters): Promise<ReportData> {
       _sum: { amount: true },
     }),
     prisma.graduate.count(),
-    moraByStudent(),
+    getMoraStudents(),
   ]);
   const status: Record<string, number> = { ACTIVO: 0, EGRESADO: 0, BAJA: 0 };
   byStatus.forEach((r) => (status[r.status] = r._count));
   const ingresos = Number(income._sum.amount ?? 0) - Number(income._sum.discount ?? 0);
   const egresos = Number(expense._sum.amount ?? 0);
-  const moraTotal = mora.reduce((s, m) => s + m.saldo, 0);
 
   return {
     title: "Resumen Ejecutivo",
@@ -105,8 +71,8 @@ async function buildResumen(f: ReportFilters): Promise<ReportData> {
       { label: "Ingresos del periodo", value: money(ingresos) },
       { label: "Egresos del periodo", value: money(egresos) },
       { label: "Saldo del periodo", value: money(ingresos - egresos) },
-      { label: "Mora acumulada", value: money(moraTotal) },
-      { label: "Estudiantes en mora", value: String(mora.length) },
+      { label: `En mora (${mora.label})`, value: String(mora.pending) },
+      { label: "Al día este mes", value: String(mora.paid) },
       { label: "De baja", value: String(status.BAJA) },
     ],
     tables: [
@@ -176,22 +142,28 @@ async function buildCobranza(f: ReportFilters): Promise<ReportData> {
 }
 
 async function buildMora(f: ReportFilters): Promise<ReportData> {
-  let list = await moraByStudent();
-  if (f.sede) list = list.filter((m) => m.sede === f.sede);
-  const total = list.reduce((s, m) => s + m.saldo, 0);
+  const mora = await getMoraStudents(f.month);
+  let list = mora.students;
+  if (f.sede) list = list.filter((s) => (s.sede ?? SIN_SEDE) === f.sede);
   return {
     title: "Estudiantes en mora",
-    subtitle: "Cuotas pendientes ya vencidas" + (f.sede ? ` — sede ${f.sede}` : ""),
+    subtitle:
+      `Sin pagar la mensualidad de ${mora.label}` +
+      (f.sede ? ` — sede ${f.sede}` : ""),
     kpis: [
-      { label: "Estudiantes en mora", value: String(list.length) },
-      { label: "Mora total", value: money(total) },
+      { label: "En mora", value: String(list.length) },
+      { label: "Al día", value: String(mora.paid) },
+      { label: "Total cohorte", value: String(mora.total) },
     ],
     tables: [
       {
-        title: "Detalle por estudiante",
-        columns: ["Estudiante", "Sede", "Cuotas vencidas", "Saldo"],
-        rows: list.map((m) => [m.name, m.sede, m.cargos, money(m.saldo)]),
-        totals: ["Total", "", "", money(total)],
+        title: `Estudiantes que no han pagado ${mora.label}`,
+        columns: ["Estudiante", "Sede", "Municipio"],
+        rows: list.map((s) => [
+          s.fullName,
+          s.sede ?? "—",
+          s.municipality ?? "—",
+        ]),
       },
     ],
   };
