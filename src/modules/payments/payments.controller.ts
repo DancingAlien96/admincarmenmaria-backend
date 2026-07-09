@@ -38,6 +38,18 @@ export async function linkController(req: Request, res: Response) {
   res.json({ payment });
 }
 
+export async function linkSuggestionsController(_req: Request, res: Response) {
+  res.json({ groups: await service.getLinkSuggestions() });
+}
+
+export async function linkManyController(req: Request, res: Response) {
+  const result = await service.linkManyPayments(
+    req.body.paymentIds,
+    req.body.studentId
+  );
+  res.json(result);
+}
+
 export async function receiptController(req: Request, res: Response) {
   const payment = await service.getPaymentForReceipt(req.params.id);
   const pdf = await generateReceiptPDF(payment);

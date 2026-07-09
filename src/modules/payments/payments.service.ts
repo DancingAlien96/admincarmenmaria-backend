@@ -9,6 +9,7 @@ import {
   type WooBuyerInfo,
 } from "../../lib/woocommerce.js";
 import { normalizeName } from "../../lib/normalize.js";
+import { nameSimilarity } from "../../lib/similarity.js";
 
 // Completa los datos del expediente (municipio, departamento, dirección, DPI)
 // con lo que trae el checkout, sin sobrescribir lo que ya tenga cargado.
@@ -260,6 +261,100 @@ function findInIndex(
 // Un concepto es de "inscripcion" si lo menciona (nuevo estudiante).
 export function isInscripcionConcept(concept: string): boolean {
   return /inscrip/i.test(concept);
+}
+
+// Sugerencias de vinculacion: agrupa los pagos huerfanos por pagador y
+// propone el estudiante mas parecido (por similitud de nombre) para aprobar.
+export async function getLinkSuggestions() {
+  const [students, orphans] = await Promise.all([
+    prisma.student.findMany({
+      where: { archived: false },
+      select: { id: true, fullName: true, sede: true },
+    }),
+    prisma.payment.findMany({
+      where: { studentId: null, status: "ACTIVO" },
+      select: {
+        id: true,
+        payerName: true,
+        payerEmail: true,
+        concept: true,
+        amount: true,
+        paidAt: true,
+      },
+      orderBy: { paidAt: "desc" },
+    }),
+  ]);
+
+  // Agrupa por pagador (nombre normalizado).
+  type Group = {
+    key: string;
+    payerName: string;
+    payerEmail: string | null;
+    paymentIds: string[];
+    count: number;
+    totalAmount: number;
+    concepts: Set<string>;
+  };
+  const groups = new Map<string, Group>();
+  for (const p of orphans) {
+    const key = normalizeName(p.payerName ?? "") || p.id;
+    const g =
+      groups.get(key) ??
+      ({
+        key,
+        payerName: p.payerName ?? "(sin nombre)",
+        payerEmail: p.payerEmail,
+        paymentIds: [],
+        count: 0,
+        totalAmount: 0,
+        concepts: new Set<string>(),
+      } as Group);
+    g.paymentIds.push(p.id);
+    g.count += 1;
+    g.totalAmount += Number(p.amount);
+    if (p.concept) g.concepts.add(p.concept);
+    groups.set(key, g);
+  }
+
+  // Para cada grupo, mejores estudiantes por similitud.
+  const result = [...groups.values()].map((g) => {
+    const scored = students
+      .map((s) => ({
+        studentId: s.id,
+        fullName: s.fullName,
+        sede: s.sede,
+        score: nameSimilarity(g.payerName, s.fullName),
+      }))
+      .filter((x) => x.score > 0)
+      .sort((a, b) => b.score - a.score);
+    return {
+      key: g.key,
+      payerName: g.payerName,
+      payerEmail: g.payerEmail,
+      count: g.count,
+      totalAmount: g.totalAmount,
+      paymentIds: g.paymentIds,
+      concepts: [...g.concepts],
+      best: scored[0] ?? null,
+      alternatives: scored.slice(1, 4),
+    };
+  });
+
+  // Solo grupos con alguna coincidencia razonable, mejor primero.
+  return result
+    .filter((r) => r.best && r.best.score >= 0.34)
+    .sort((a, b) => (b.best!.score ?? 0) - (a.best!.score ?? 0));
+}
+
+// Vincula varios pagos (por id) a un mismo estudiante. Solo afecta huerfanos.
+export async function linkManyPayments(paymentIds: string[], studentId: string) {
+  const student = await prisma.student.findUnique({ where: { id: studentId } });
+  if (!student) throw badRequest("El estudiante no existe");
+  const res = await prisma.payment.updateMany({
+    where: { id: { in: paymentIds }, studentId: null },
+    data: { studentId },
+  });
+  return { linked: res.count };
 }
 
 // Re-vincula pagos "huerfanos" (sin estudiante) a un expediente existente,

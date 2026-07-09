@@ -7,6 +7,7 @@ import {
   createPaymentSchema,
   annulPaymentSchema,
   linkPaymentSchema,
+  linkManySchema,
   listPaymentsQuery,
   paymentIdParam,
 } from "./payments.schemas.js";
@@ -16,6 +17,8 @@ import {
   createController,
   annulController,
   linkController,
+  linkSuggestionsController,
+  linkManyController,
   syncController,
   receiptController,
 } from "./payments.controller.js";
@@ -40,6 +43,20 @@ paymentsRouter.post(
   asyncHandler(createController)
 );
 paymentsRouter.post("/sync", canEdit, asyncHandler(syncController));
+
+// Vinculacion asistida (rutas fijas antes de "/:id")
+paymentsRouter.get(
+  "/link-suggestions",
+  canEdit,
+  asyncHandler(linkSuggestionsController)
+);
+paymentsRouter.post(
+  "/link-many",
+  canEdit,
+  validate({ body: linkManySchema }),
+  asyncHandler(linkManyController)
+);
+
 paymentsRouter.get(
   "/:id",
   canRead,

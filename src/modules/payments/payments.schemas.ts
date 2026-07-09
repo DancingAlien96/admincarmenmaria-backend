@@ -29,6 +29,11 @@ export const linkPaymentSchema = z.object({
   studentId: z.string().min(1),
 });
 
+export const linkManySchema = z.object({
+  studentId: z.string().min(1, "Falta el estudiante"),
+  paymentIds: z.array(z.string().min(1)).min(1, "Sin pagos que vincular"),
+});
+
 export const listPaymentsQuery = z.object({
   studentId: z.string().optional(),
   status: z.enum(STATUS).optional(),
