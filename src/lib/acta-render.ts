@@ -155,7 +155,10 @@ function renderTable(
   d: ActaRenderInput,
   onlyNames: boolean
 ) {
-  const rows = d.rows ?? [];
+  // Los alumnos siempre se listan en orden alfabético (A→Z) por nombre.
+  const rows = [...(d.rows ?? [])].sort((a, b) =>
+    a.name.localeCompare(b.name, "es", { sensitivity: "base" })
+  );
   if (rows.length === 0) return;
 
   const cols = d.columns ?? [];
