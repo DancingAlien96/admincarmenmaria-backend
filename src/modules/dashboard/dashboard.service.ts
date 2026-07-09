@@ -386,10 +386,15 @@ export async function getMonthlyPaymentStatus(monthStr?: string) {
   }
   const start = new Date(y, m, 1);
   const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
+  const yearStart = new Date(y, 0, 1); // solo la cohorte del año en curso
 
-  // Estudiantes activos que ya estaban inscritos en/antes de ese mes.
+  // Estudiantes activos del AÑO en curso, ya inscritos en/antes de ese mes.
   const eligible = await prisma.student.findMany({
-    where: { archived: false, status: "ACTIVO", enrollmentDate: { lte: end } },
+    where: {
+      archived: false,
+      status: "ACTIVO",
+      enrollmentDate: { gte: yearStart, lte: end },
+    },
     select: { id: true },
   });
   const eligibleIds = new Set(eligible.map((s) => s.id));
