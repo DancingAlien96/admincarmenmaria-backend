@@ -367,3 +367,59 @@ export async function getOverview() {
 }
 
 export type OverviewData = Awaited<ReturnType<typeof getOverview>>;
+
+// Estado de la mensualidad de un mes: cuántos estudiantes activos (que ya
+// estaban inscritos ese mes) pagaron su mensualidad y cuántos están pendientes.
+const MONTHS_FULL = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+export async function getMonthlyPaymentStatus(monthStr?: string) {
+  const now = new Date();
+  let y = now.getFullYear();
+  let m = now.getMonth();
+  if (monthStr && /^\d{4}-\d{2}$/.test(monthStr)) {
+    const [yy, mm] = monthStr.split("-").map(Number);
+    y = yy;
+    m = mm - 1;
+  }
+  const start = new Date(y, m, 1);
+  const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
+
+  // Estudiantes activos que ya estaban inscritos en/antes de ese mes.
+  const eligible = await prisma.student.findMany({
+    where: { archived: false, status: "ACTIVO", enrollmentDate: { lte: end } },
+    select: { id: true },
+  });
+  const eligibleIds = new Set(eligible.map((s) => s.id));
+
+  // Pagos de mensualidad (concepto contiene "mensual") de ese mes.
+  const pays = await prisma.payment.findMany({
+    where: {
+      status: "ACTIVO",
+      paidAt: { gte: start, lte: end },
+      concept: { contains: "ensual" },
+      studentId: { not: null },
+    },
+    select: { studentId: true },
+  });
+  const paidSet = new Set<string>();
+  for (const p of pays) {
+    if (p.studentId && eligibleIds.has(p.studentId)) paidSet.add(p.studentId);
+  }
+
+  const total = eligibleIds.size;
+  const paid = paidSet.size;
+  return {
+    month: `${y}-${String(m + 1).padStart(2, "0")}`,
+    label: `${MONTHS_FULL[m]} ${y}`,
+    total,
+    paid,
+    pending: Math.max(0, total - paid),
+  };
+}
+
+export type MonthlyPaymentStatus = Awaited<
+  ReturnType<typeof getMonthlyPaymentStatus>
+>;

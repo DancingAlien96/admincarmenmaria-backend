@@ -16,6 +16,12 @@ export async function overviewController(_req: Request, res: Response) {
   res.json(await service.getOverview());
 }
 
+// Estado de la mensualidad del mes (pagada vs pendiente).
+export async function paymentStatusController(req: Request, res: Response) {
+  const month = typeof req.query.month === "string" ? req.query.month : undefined;
+  res.json(await service.getMonthlyPaymentStatus(month));
+}
+
 export async function dashboardReportController(req: Request, res: Response) {
   const data = await service.getDashboard(
     req.query as unknown as DashboardQuery

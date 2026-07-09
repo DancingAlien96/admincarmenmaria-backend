@@ -9,6 +9,7 @@ import {
   dashboardReportController,
   dashboardExcelController,
   overviewController,
+  paymentStatusController,
 } from "./dashboard.controller.js";
 
 export const dashboardRouter = Router();
@@ -19,6 +20,7 @@ dashboardRouter.use(requireAuth);
 
 // Overview de inicio: cualquier usuario autenticado (no requiere seccion DASHBOARD)
 dashboardRouter.get("/overview", asyncHandler(overviewController));
+dashboardRouter.get("/payment-status", asyncHandler(paymentStatusController));
 
 dashboardRouter.get(
   "/",
