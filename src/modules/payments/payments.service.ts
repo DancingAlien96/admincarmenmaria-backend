@@ -262,6 +262,33 @@ export function isInscripcionConcept(concept: string): boolean {
   return /inscrip/i.test(concept);
 }
 
+// Re-vincula pagos "huerfanos" (sin estudiante) a un expediente existente,
+// por correo o nombre normalizado. Para pagos importados antes de que el sync
+// vinculara por nombre. No toca los que ya tienen estudiante.
+export async function relinkOrphanPayments() {
+  const idx = await buildStudentIndex();
+  const orphans = await prisma.payment.findMany({
+    where: { studentId: null },
+    select: { id: true, payerName: true, payerEmail: true },
+  });
+  let linked = 0;
+  for (const p of orphans) {
+    const studentId = findInIndex(
+      idx,
+      p.payerEmail ?? undefined,
+      p.payerName ?? ""
+    );
+    if (studentId) {
+      await prisma.payment.update({
+        where: { id: p.id },
+        data: { studentId },
+      });
+      linked++;
+    }
+  }
+  return { total: orphans.length, linked, remaining: orphans.length - linked };
+}
+
 // Crea un estudiante nuevo a partir de los datos de un pago de inscripcion.
 // Sin DPI (se completa luego). Registra el historial inicial.
 async function createStudentFromPayment(data: {
