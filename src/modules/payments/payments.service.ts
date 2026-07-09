@@ -4,9 +4,33 @@ import { badRequest, notFound } from "../../lib/http-error.js";
 import {
   fetchOrders,
   extractSede,
+  extractBuyerInfo,
   type WooOrder,
+  type WooBuyerInfo,
 } from "../../lib/woocommerce.js";
 import { normalizeName } from "../../lib/normalize.js";
+
+// Completa los datos del expediente (municipio, departamento, dirección, DPI)
+// con lo que trae el checkout, sin sobrescribir lo que ya tenga cargado.
+async function applyBuyerInfoToStudent(studentId: string, info: WooBuyerInfo) {
+  const s = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { municipality: true, department: true, address: true, dpi: true },
+  });
+  if (!s) return;
+  const data: Record<string, string> = {};
+  if (!s.municipality && info.municipality) data.municipality = info.municipality;
+  if (!s.department && info.department) data.department = info.department;
+  if (!s.address && info.address) data.address = info.address;
+  if (!s.dpi && info.dpi) {
+    // El DPI es único: solo se asigna si ningún otro expediente lo tiene.
+    const dup = await prisma.student.findUnique({ where: { dpi: info.dpi } });
+    if (!dup) data.dpi = info.dpi;
+  }
+  if (Object.keys(data).length > 0) {
+    await prisma.student.update({ where: { id: studentId }, data });
+  }
+}
 import { recomputeChargeStatus } from "../charges/charges.service.js";
 import type {
   CreatePaymentInput,
@@ -315,6 +339,7 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
       const payerName =
         `${order.billing.first_name} ${order.billing.last_name}`.trim();
       const sede = extractSede(order);
+      const buyer = extractBuyerInfo(order);
 
       if (existing) {
         // Actualiza datos basicos pero respeta la anulacion y el vinculo manual
@@ -330,11 +355,15 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
           },
         });
         // Si el pago trae sede y el estudiante vinculado aun no la tiene, la hereda.
-        if (sede && existing.studentId) {
-          await prisma.student.updateMany({
-            where: { id: existing.studentId, sede: null },
-            data: { sede },
-          });
+        if (existing.studentId) {
+          if (sede) {
+            await prisma.student.updateMany({
+              where: { id: existing.studentId, sede: null },
+              data: { sede },
+            });
+          }
+          // Completa municipio/departamento/direccion/DPI desde el checkout.
+          await applyBuyerInfoToStudent(existing.studentId, buyer);
         }
         updated++;
       } else {
@@ -362,6 +391,8 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
             data: { sede },
           });
         }
+        // Completa datos del expediente (municipio/DPI/etc.) desde el checkout.
+        if (studentId) await applyBuyerInfoToStudent(studentId, buyer);
         await prisma.payment.create({
           data: {
             wooOrderId: order.id,

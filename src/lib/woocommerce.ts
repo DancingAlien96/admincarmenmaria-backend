@@ -31,9 +31,52 @@ export interface WooOrder {
     last_name: string;
     email: string;
     phone: string;
+    address_1?: string;
+    city?: string; // municipio
+    state?: string; // departamento (codigo ISO GT-XX)
   };
   line_items: WooLineItem[];
   meta_data?: WooMeta[];
+}
+
+// Departamentos de Guatemala por codigo ISO 3166-2:GT (billing.state en Woo).
+const GT_DEPTOS: Record<string, string> = {
+  "GT-AV": "Alta Verapaz", "GT-BV": "Baja Verapaz", "GT-CM": "Chimaltenango",
+  "GT-CQ": "Chiquimula", "GT-PR": "El Progreso", "GT-ES": "Escuintla",
+  "GT-GU": "Guatemala", "GT-HU": "Huehuetenango", "GT-IZ": "Izabal",
+  "GT-JA": "Jalapa", "GT-JU": "Jutiapa", "GT-PE": "Petén",
+  "GT-QZ": "Quetzaltenango", "GT-QC": "Quiché", "GT-RE": "Retalhuleu",
+  "GT-SA": "Sacatepéquez", "GT-SM": "San Marcos", "GT-SR": "Santa Rosa",
+  "GT-SO": "Sololá", "GT-SU": "Suchitepéquez", "GT-TO": "Totonicapán",
+  "GT-ZA": "Zacapa",
+};
+
+// Datos de direccion e identidad del comprador que trae el checkout.
+export interface WooBuyerInfo {
+  municipality: string | null;
+  department: string | null;
+  address: string | null;
+  dpi: string | null;
+}
+
+export function extractBuyerInfo(order: WooOrder): WooBuyerInfo {
+  const b = order.billing ?? ({} as WooOrder["billing"]);
+  const city = b.city?.trim() || null;
+  const state = b.state?.trim() || "";
+  const department = GT_DEPTOS[state.toUpperCase()] ?? (state || null);
+  const address = b.address_1?.trim() || null;
+
+  // NIT/DPI viene en meta "nit". "CF"/"C/F" = consumidor final (no es DPI).
+  const nitMeta = (order.meta_data ?? []).find(
+    (m) => String(m.key ?? "").toLowerCase() === "nit"
+  );
+  let dpi: string | null = null;
+  if (nitMeta?.value) {
+    const raw = String(nitMeta.value).replace(/\s+/g, "");
+    // DPI de Guatemala: 13 digitos. Solo lo tomamos si lo parece.
+    if (/^\d{13}$/.test(raw)) dpi = raw;
+  }
+  return { municipality: city, department, address, dpi };
 }
 
 // Normaliza la sede a un nombre canonico. Devuelve null si no la reconoce.
