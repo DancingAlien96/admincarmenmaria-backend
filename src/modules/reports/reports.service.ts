@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { getMoraStudents } from "../dashboard/dashboard.service.js";
+import { apellidoNombre, compareByApellido } from "../../lib/name-order.js";
 import type { ReportData } from "../../lib/report-render.js";
 
 export const REPORT_TYPES = [
@@ -143,7 +144,9 @@ async function buildCobranza(f: ReportFilters): Promise<ReportData> {
 
 async function buildMora(f: ReportFilters): Promise<ReportData> {
   const mora = await getMoraStudents(f.month);
-  let list = mora.students;
+  let list = [...mora.students].sort((a, b) =>
+    compareByApellido(a.fullName, b.fullName)
+  );
   if (f.sede) list = list.filter((s) => (s.sede ?? SIN_SEDE) === f.sede);
   return {
     title: "Estudiantes en mora",
@@ -162,7 +165,7 @@ async function buildMora(f: ReportFilters): Promise<ReportData> {
         widths: [3, 1.6, 2],
         align: ["left", "left", "left"],
         rows: list.map((s) => [
-          s.fullName,
+          apellidoNombre(s.fullName),
           s.sede ?? "—",
           s.municipality ?? "—",
         ]),
@@ -180,9 +183,8 @@ async function buildEstudiantes(f: ReportFilters): Promise<ReportData> {
       gte: new Date(f.year, 0, 1),
       lt: new Date(f.year + 1, 0, 1),
     };
-  const rows = await prisma.student.findMany({
+  const raw = await prisma.student.findMany({
     where,
-    orderBy: { fullName: "asc" },
     select: {
       fullName: true,
       dpi: true,
@@ -192,6 +194,8 @@ async function buildEstudiantes(f: ReportFilters): Promise<ReportData> {
       enrollmentDate: true,
     },
   });
+  // Orden alfabético por apellido.
+  const rows = raw.sort((a, b) => compareByApellido(a.fullName, b.fullName));
   const STAT: Record<string, string> = { ACTIVO: "Activo", EGRESADO: "Egresado", BAJA: "Baja" };
   const filtros = [
     f.status ? STAT[f.status] : null,
@@ -208,7 +212,7 @@ async function buildEstudiantes(f: ReportFilters): Promise<ReportData> {
         widths: [3.2, 2.2, 2, 1.4, 1.7, 1.5],
         align: ["left", "left", "left", "left", "left", "left"],
         rows: rows.map((r) => [
-          r.fullName,
+          apellidoNombre(r.fullName),
           r.dpi ?? "—",
           r.sede ?? "—",
           STAT[r.status] ?? r.status,
@@ -227,9 +231,8 @@ async function buildEgresados(f: ReportFilters): Promise<ReportData> {
       gte: new Date(f.year, 0, 1),
       lt: new Date(f.year + 1, 0, 1),
     };
-  const rows = await prisma.graduate.findMany({
+  const raw = await prisma.graduate.findMany({
     where,
-    orderBy: { graduationDate: "desc" },
     select: {
       fullName: true,
       dpi: true,
@@ -238,6 +241,7 @@ async function buildEgresados(f: ReportFilters): Promise<ReportData> {
       graduationDate: true,
     },
   });
+  const rows = raw.sort((a, b) => compareByApellido(a.fullName, b.fullName));
   return {
     title: "Egresados / Diplomas",
     subtitle: f.year ? `Año ${f.year}` : "Todos los egresados",
@@ -248,7 +252,7 @@ async function buildEgresados(f: ReportFilters): Promise<ReportData> {
         widths: [3.2, 2.2, 2, 2, 1.6],
         align: ["left", "left", "left", "left", "left"],
         rows: rows.map((r) => [
-          r.fullName,
+          apellidoNombre(r.fullName),
           r.dpi ?? "—",
           r.diplomaNumber,
           r.mspasCode ?? "—",

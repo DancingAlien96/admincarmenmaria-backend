@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { notFound, badRequest } from "../../lib/http-error.js";
 import { deleteFile } from "../../lib/storage.js";
 import { normalizeName } from "../../lib/normalize.js";
+import { apellidoNombre, compareByApellido } from "../../lib/name-order.js";
 import { migrateStudentToGraduate } from "../graduates/graduates.service.js";
 import type {
   CreateStudentInput,
@@ -38,25 +39,30 @@ export async function listStudents(q: ListStudentsQuery) {
       : {}),
   };
 
-  const [total, data] = await Promise.all([
-    prisma.student.count({ where }),
-    prisma.student.findMany({
-      where,
-      orderBy: { fullName: "asc" },
-      skip: (q.page - 1) * q.pageSize,
-      take: q.pageSize,
-      select: {
-        id: true,
-        fullName: true,
-        dpi: true,
-        status: true,
-        sede: true,
-        phonePrimary: true,
-        enrollmentDate: true,
-        _count: { select: { documents: true } },
-      },
-    }),
-  ]);
+  // Se ordena por apellido (Apellidos Nombres), que no es un campo de la BD;
+  // por eso se traen todos los que coinciden y se pagina en memoria.
+  const all = await prisma.student.findMany({
+    where,
+    select: {
+      id: true,
+      fullName: true,
+      dpi: true,
+      status: true,
+      sede: true,
+      phonePrimary: true,
+      enrollmentDate: true,
+      _count: { select: { documents: true } },
+    },
+  });
+  all.sort((a, b) => compareByApellido(a.fullName, b.fullName));
+
+  const total = all.length;
+  const start = (q.page - 1) * q.pageSize;
+  const data = all.slice(start, start + q.pageSize).map((s) => ({
+    ...s,
+    // Nombre reordenado para mostrar en la lista.
+    sortName: apellidoNombre(s.fullName),
+  }));
 
   return {
     data,

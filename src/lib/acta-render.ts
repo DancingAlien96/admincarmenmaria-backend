@@ -7,6 +7,7 @@ import {
   dateShort,
 } from "./date-words.js";
 import { UPLOAD_ROOT } from "./storage.js";
+import { apellidoNombre } from "./name-order.js";
 
 const BRAND = "#16314f";
 const ASSETS_DIR = path.resolve(process.cwd(), "assets");
@@ -155,10 +156,11 @@ function renderTable(
   d: ActaRenderInput,
   onlyNames: boolean
 ) {
-  // Los alumnos siempre se listan en orden alfabético (A→Z) por nombre.
-  const rows = [...(d.rows ?? [])].sort((a, b) =>
-    a.name.localeCompare(b.name, "es", { sensitivity: "base" })
-  );
+  // Los alumnos se muestran y ordenan por apellido (A→Z): el nombre se
+  // reordena a "Apellidos Nombres".
+  const rows = (d.rows ?? [])
+    .map((r) => ({ ...r, name: apellidoNombre(r.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
   if (rows.length === 0) return;
 
   const cols = d.columns ?? [];
