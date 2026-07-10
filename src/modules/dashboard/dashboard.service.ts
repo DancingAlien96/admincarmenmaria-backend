@@ -449,3 +449,42 @@ export async function getMonthlyPaymentStatus(monthStr?: string) {
 export type MonthlyPaymentStatus = Awaited<
   ReturnType<typeof getMonthlyPaymentStatus>
 >;
+
+// Estudiantes por municipio para el mapa, filtrable por año de inscripción
+// (por defecto, la cohorte del año en curso).
+export async function getStudentsByMunicipality(yearStr?: string) {
+  const now = new Date();
+  const year =
+    yearStr && /^\d{4}$/.test(yearStr) ? Number(yearStr) : now.getFullYear();
+
+  const rows = await prisma.student.groupBy({
+    by: ["municipality", "department"],
+    where: {
+      archived: false,
+      enrollmentDate: {
+        gte: new Date(year, 0, 1),
+        lt: new Date(year + 1, 0, 1),
+      },
+    },
+    _count: true,
+  });
+
+  let studentsWithoutLocation = 0;
+  const studentsByMunicipality = rows
+    .map((r) => ({
+      department: (r.department ?? "").trim(),
+      municipality: (r.municipality ?? "").trim(),
+      count: r._count,
+    }))
+    .filter((r) => {
+      if (!r.municipality) {
+        studentsWithoutLocation += r.count;
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => b.count - a.count);
+
+  const total = rows.reduce((s, r) => s + r._count, 0);
+  return { year, total, studentsByMunicipality, studentsWithoutLocation };
+}

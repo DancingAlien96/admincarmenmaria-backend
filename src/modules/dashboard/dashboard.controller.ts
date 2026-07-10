@@ -22,6 +22,12 @@ export async function paymentStatusController(req: Request, res: Response) {
   res.json(await service.getMonthlyPaymentStatus(month));
 }
 
+// Estudiantes por municipio (mapa), filtrable por año.
+export async function municipalitiesController(req: Request, res: Response) {
+  const year = typeof req.query.year === "string" ? req.query.year : undefined;
+  res.json(await service.getStudentsByMunicipality(year));
+}
+
 export async function dashboardReportController(req: Request, res: Response) {
   const data = await service.getDashboard(
     req.query as unknown as DashboardQuery
