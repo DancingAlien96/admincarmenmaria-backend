@@ -22,6 +22,8 @@ import {
 import { teachersRouter } from "./modules/teachers/teachers.routes.js";
 import { signatoriesRouter } from "./modules/signatories/signatories.routes.js";
 import { reportsRouter } from "./modules/reports/reports.routes.js";
+import { portalRouter } from "./modules/portal/portal.routes.js";
+import { invitesRouter } from "./modules/portal-invites/invites.routes.js";
 
 export function createApp() {
   const app = express();
@@ -78,6 +80,8 @@ export function createApp() {
   app.use("/api/teachers", teachersRouter);
   app.use("/api/signatories", signatoriesRouter);
   app.use("/api/reports", reportsRouter);
+  app.use("/api/portal", portalRouter);
+  app.use("/api/portal-invites", invitesRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);

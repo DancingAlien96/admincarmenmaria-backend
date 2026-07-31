@@ -13,6 +13,7 @@ export async function getUserProfile(userId: string) {
       email: true,
       role: true,
       active: true,
+      studentId: true,
       permissions: { select: { section: true, level: true } },
     },
   });
