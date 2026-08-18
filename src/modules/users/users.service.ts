@@ -16,7 +16,10 @@ const userSelect = {
 } as const;
 
 export function listUsers() {
+  // Solo cuentas de personal administrativo. Las cuentas de portal
+  // (ESTUDIANTE/DOCENTE) se gestionan desde su expediente, no aquí.
   return prisma.user.findMany({
+    where: { role: { in: ["ADMIN", "STAFF"] } },
     select: userSelect,
     orderBy: { createdAt: "asc" },
   });
