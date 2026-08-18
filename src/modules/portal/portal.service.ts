@@ -2,6 +2,56 @@ import { prisma } from "../../lib/prisma.js";
 import { notFound, forbidden, badRequest } from "../../lib/http-error.js";
 import { normalizeName } from "../../lib/normalize.js";
 import { hashPassword, verifyPassword } from "../../lib/auth.js";
+import { studentAccount } from "../charges/charges.service.js";
+
+// Resuelve el studentId de la cuenta (valida rol ESTUDIANTE).
+async function requireStudentId(userId: string) {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { studentId: true, role: true },
+  });
+  if (!u || u.role !== "ESTUDIANTE" || !u.studentId) {
+    throw forbidden("Esta cuenta no es de un estudiante");
+  }
+  return u.studentId;
+}
+
+// Línea de tiempo de cuotas del alumno logueado (portal · Pagos).
+export async function getCuotasForUser(userId: string) {
+  const studentId = await requireStudentId(userId);
+  const { charges, summary } = await studentAccount(studentId);
+
+  const cuotas = charges
+    // Orden cronológico ascendente para la línea de tiempo.
+    .slice()
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
+    .map((c) => {
+      const estado =
+        c.status === "PAGADO" || c.saldo <= 0
+          ? "pagado"
+          : c.overdue
+            ? "vencido"
+            : c.paid > 0
+              ? "parcial"
+              : "pendiente";
+      return {
+        id: c.id,
+        concept: c.concept,
+        amount: c.amount,
+        paid: c.paid,
+        saldo: c.saldo,
+        dueDate: c.dueDate,
+        estado,
+      };
+    });
+
+  const pagadas = cuotas.filter((c) => c.estado === "pagado").length;
+  return {
+    cuotas,
+    summary,
+    progress: { pagadas, total: cuotas.length },
+  };
+}
 
 // El alumno cambia su contraseña (verifica la actual).
 export async function changePassword(

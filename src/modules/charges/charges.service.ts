@@ -6,6 +6,7 @@ import type {
   BulkChargeInput,
   AnnulChargeInput,
   ListChargesQuery,
+  CuotaPlanInput,
 } from "./charges.schemas.js";
 
 // Suma neta (monto - descuento) de pagos ACTIVOS por cargo
@@ -161,6 +162,65 @@ export async function recomputeChargeStatus(chargeId: string) {
       data: { status: newStatus },
     });
   }
+}
+
+// Genera el plan de cuotas estándar de un estudiante (Admisión + N
+// mensualidades + Trámite). Base del "mayor orden" del portal 2027.
+export async function generateCuotaPlan(
+  studentId: string,
+  input: CuotaPlanInput,
+  userId?: string
+) {
+  const student = await prisma.student.findUnique({ where: { id: studentId } });
+  if (!student) throw notFound("Expediente no encontrado");
+
+  const existing = await prisma.charge.count({
+    where: { studentId, status: { not: "ANULADO" } },
+  });
+  if (existing > 0) {
+    throw badRequest(
+      "Este estudiante ya tiene cuotas asignadas. Anula las anteriores antes de generar un plan nuevo."
+    );
+  }
+
+  const [y, m] = input.startMonth.split("-").map(Number);
+  if (!y || !m) throw badRequest("Mes de inicio inválido (formato AAAA-MM)");
+
+  // Vence el día 1 del mes correspondiente (UTC para no correrse por zona).
+  const dueOn = (monthsAhead: number) =>
+    new Date(Date.UTC(y, m - 1 + monthsAhead, 1));
+
+  const data: Prisma.ChargeCreateManyInput[] = [];
+  if (input.inscripcion > 0) {
+    data.push({
+      studentId,
+      concept: "Admisión",
+      amount: input.inscripcion,
+      dueDate: dueOn(0),
+      createdById: userId,
+    });
+  }
+  for (let i = 1; i <= input.numCuotas; i++) {
+    data.push({
+      studentId,
+      concept: `Cuota ${i}`,
+      amount: input.mensualidad,
+      dueDate: dueOn(i),
+      createdById: userId,
+    });
+  }
+  if (input.tramite > 0) {
+    data.push({
+      studentId,
+      concept: "Trámite de título",
+      amount: input.tramite,
+      dueDate: dueOn(input.numCuotas + 1),
+      createdById: userId,
+    });
+  }
+
+  const res = await prisma.charge.createMany({ data });
+  return { created: res.count };
 }
 
 // Estado de cuenta de un estudiante: cargos + totales

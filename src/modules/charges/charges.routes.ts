@@ -9,6 +9,7 @@ import {
   annulChargeSchema,
   listChargesQuery,
   chargeIdParam,
+  cuotaPlanSchema,
 } from "./charges.schemas.js";
 import {
   listController,
@@ -16,6 +17,7 @@ import {
   bulkController,
   annulController,
   accountController,
+  planController,
 } from "./charges.controller.js";
 
 export const chargesRouter = Router();
@@ -48,6 +50,13 @@ chargesRouter.get(
   "/student/:studentId",
   canRead,
   asyncHandler(accountController)
+);
+// Genera el plan de cuotas estándar para un estudiante
+chargesRouter.post(
+  "/student/:studentId/plan",
+  canEdit,
+  validate({ body: cuotaPlanSchema }),
+  asyncHandler(planController)
 );
 chargesRouter.post(
   "/:id/annul",

@@ -26,3 +26,12 @@ export async function annulController(req: Request, res: Response) {
 export async function accountController(req: Request, res: Response) {
   res.json(await service.studentAccount(req.params.studentId));
 }
+
+export async function planController(req: Request, res: Response) {
+  const result = await service.generateCuotaPlan(
+    req.params.studentId,
+    req.body,
+    req.user?.id
+  );
+  res.status(201).json(result);
+}

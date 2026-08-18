@@ -23,6 +23,17 @@ export const annulChargeSchema = z.object({
   reason: z.string().min(3, "Indica el motivo").trim(),
 });
 
+// Plan de cuotas estándar (Admisión + N mensualidades + Trámite)
+export const cuotaPlanSchema = z.object({
+  inscripcion: z.coerce.number().min(0).default(0),
+  mensualidad: z.coerce.number().positive("La mensualidad debe ser mayor a 0"),
+  numCuotas: z.coerce.number().int().min(1).max(36),
+  tramite: z.coerce.number().min(0).default(0),
+  startMonth: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "Mes de inicio inválido (AAAA-MM)"),
+});
+
 export const listChargesQuery = z.object({
   studentId: z.string().optional(),
   status: z.enum(STATUS).optional(),
@@ -40,3 +51,4 @@ export type CreateChargeInput = z.infer<typeof createChargeSchema>;
 export type BulkChargeInput = z.infer<typeof bulkChargeSchema>;
 export type AnnulChargeInput = z.infer<typeof annulChargeSchema>;
 export type ListChargesQuery = z.infer<typeof listChargesQuery>;
+export type CuotaPlanInput = z.infer<typeof cuotaPlanSchema>;

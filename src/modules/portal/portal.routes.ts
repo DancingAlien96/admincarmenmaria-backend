@@ -2,7 +2,11 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { asyncHandler } from "../../lib/async-handler.js";
 import { requireAuth } from "../../middleware/require-auth.js";
-import { getDashboardForUser, changePassword } from "./portal.service.js";
+import {
+  getDashboardForUser,
+  changePassword,
+  getCuotasForUser,
+} from "./portal.service.js";
 
 export const portalRouter = Router();
 
@@ -13,6 +17,14 @@ portalRouter.get(
   "/dashboard",
   asyncHandler(async (req: Request, res: Response) => {
     res.json(await getDashboardForUser(req.user!.id));
+  })
+);
+
+// Línea de tiempo de cuotas del alumno.
+portalRouter.get(
+  "/cuotas",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await getCuotasForUser(req.user!.id));
   })
 );
 
