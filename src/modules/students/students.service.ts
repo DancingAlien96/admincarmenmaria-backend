@@ -88,6 +88,7 @@ export async function getStudent(id: string) {
         include: { changedBy: { select: { name: true } } },
       },
       createdBy: { select: { name: true } },
+      portalUser: { select: { email: true, active: true, createdAt: true } },
     },
   });
   if (!student) throw notFound("Expediente no encontrado");
