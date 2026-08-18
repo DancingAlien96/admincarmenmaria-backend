@@ -6,6 +6,7 @@ import {
   getDashboardForUser,
   changePassword,
   getCuotasForUser,
+  getDocumentosForUser,
 } from "./portal.service.js";
 
 export const portalRouter = Router();
@@ -25,6 +26,14 @@ portalRouter.get(
   "/cuotas",
   asyncHandler(async (req: Request, res: Response) => {
     res.json(await getCuotasForUser(req.user!.id));
+  })
+);
+
+// Checklist de documentación del alumno.
+portalRouter.get(
+  "/documentos",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await getDocumentosForUser(req.user!.id));
   })
 );
 

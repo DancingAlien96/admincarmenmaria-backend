@@ -3,6 +3,7 @@ import { notFound, forbidden, badRequest } from "../../lib/http-error.js";
 import { normalizeName } from "../../lib/normalize.js";
 import { hashPassword, verifyPassword } from "../../lib/auth.js";
 import { studentAccount } from "../charges/charges.service.js";
+import { getStudentChecklist } from "../doc-checklist/doc-checklist.service.js";
 
 // Resuelve el studentId de la cuenta (valida rol ESTUDIANTE).
 async function requireStudentId(userId: string) {
@@ -51,6 +52,12 @@ export async function getCuotasForUser(userId: string) {
     summary,
     progress: { pagadas, total: cuotas.length },
   };
+}
+
+// Checklist de documentación del alumno logueado (portal · Documentación).
+export async function getDocumentosForUser(userId: string) {
+  const studentId = await requireStudentId(userId);
+  return getStudentChecklist(studentId);
 }
 
 // El alumno cambia su contraseña (verifica la actual).

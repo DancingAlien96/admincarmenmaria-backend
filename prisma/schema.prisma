@@ -60,6 +60,7 @@ model User {
   annulledCharges    Charge[]              @relation("ChargeAnnulledBy")
   createdGraduates   Graduate[]            @relation("GraduateCreatedBy")
   createdActas       Acta[]                @relation("ActaCreatedBy")
+  docStatusUpdates   StudentDocStatus[]    @relation("DocStatusUpdatedBy")
 
   @@index([email])
 }
@@ -123,6 +124,7 @@ model Student {
   graduate      Graduate?
   whatsappMessages WhatsappMessage[]
   portalUser    User?                  @relation("StudentPortalUser")
+  docStatuses   StudentDocStatus[]
 
   @@index([dpi])
   @@index([status])
@@ -170,6 +172,42 @@ model StudentDocument {
   uploadedBy User?   @relation("DocUploadedBy", fields: [uploadedById], references: [id])
 
   @@index([studentId])
+}
+
+// Catalogo de documentos requeridos del expediente (checklist). Editable por
+// el admin: puede agregar, renombrar, reordenar o desactivar documentos.
+model DocRequirement {
+  id        String   @id @default(cuid())
+  name      String
+  order     Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  statuses StudentDocStatus[]
+
+  @@index([active])
+}
+
+// Estado de un documento requerido para un estudiante (entregado / pendiente).
+model StudentDocStatus {
+  id            String    @id @default(cuid())
+  studentId     String
+  requirementId String
+  delivered     Boolean   @default(false)
+  receivedAt    DateTime?
+  notes         String?   @db.Text
+  updatedById   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  student     Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  requirement DocRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  updatedBy   User?          @relation("DocStatusUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([studentId, requirementId])
+  @@index([studentId])
+  @@index([requirementId])
 }
 
 // Historial de cambios de estado (cada cambio registra fecha y motivo)
