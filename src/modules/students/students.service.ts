@@ -262,10 +262,6 @@ export async function createPortalAccount(studentId: string) {
     );
   }
   const existing = await prisma.user.findFirst({ where: { studentId } });
-  if (existing) throw conflict("Este estudiante ya tiene una cuenta de acceso");
-
-  const emailTaken = await prisma.user.findUnique({ where: { email: student.email } });
-  if (emailTaken) throw conflict("Ese correo ya está usado por otra cuenta");
 
   await assignExpedienteIfMissing(studentId);
   const expediente = (
@@ -275,17 +271,35 @@ export async function createPortalAccount(studentId: string) {
     })
   )?.expedienteNumber;
 
-  const defaultPassword = student.dpi?.trim() || expediente || student.id.slice(-8);
+  // El DPI puede venir con espacios (ej. "337593264 2004"); se quitan todos
+  // para que la contraseña por defecto no lleve espacios.
+  const dpiClean = student.dpi?.replace(/\s+/g, "");
+  const defaultPassword = dpiClean || expediente || student.id.slice(-8);
+  const passwordHash = await hashPassword(defaultPassword);
+
+  // Si ya tiene cuenta, se reinicia su contraseña por defecto (sirve para
+  // corregir credenciales o resetear cuando el alumno la olvida).
+  if (existing) {
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: { passwordHash },
+    });
+    return { email: existing.email, defaultPassword, reset: true };
+  }
+
+  const emailTaken = await prisma.user.findUnique({ where: { email: student.email } });
+  if (emailTaken) throw conflict("Ese correo ya está usado por otra cuenta");
+
   await prisma.user.create({
     data: {
       name: student.fullName,
       email: student.email,
-      passwordHash: await hashPassword(defaultPassword),
+      passwordHash,
       role: "ESTUDIANTE",
       studentId,
     },
   });
-  return { email: student.email, defaultPassword };
+  return { email: student.email, defaultPassword, reset: false };
 }
 
 // --- Integridad: deteccion y fusion de expedientes duplicados ---------------
