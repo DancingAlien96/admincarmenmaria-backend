@@ -24,6 +24,7 @@ import {
   syncController,
   duplicatesController,
   mergeController,
+  portalAccountController,
 } from "./students.controller.js";
 
 export const studentsRouter = Router();
@@ -69,6 +70,13 @@ studentsRouter.patch(
   canEdit,
   validate({ params: studentIdParam, body: updateStudentSchema }),
   asyncHandler(updateController)
+);
+// Crear cuenta del portal del alumno (contraseña por defecto = su DPI)
+studentsRouter.post(
+  "/:id/portal-account",
+  canEdit,
+  validate({ params: studentIdParam }),
+  asyncHandler(portalAccountController)
 );
 studentsRouter.post(
   "/:id/status",

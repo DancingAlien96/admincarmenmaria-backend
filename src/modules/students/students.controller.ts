@@ -56,6 +56,12 @@ export async function deleteDocumentController(req: Request, res: Response) {
   res.json(result);
 }
 
+// Crea la cuenta del portal del estudiante (contraseña por defecto).
+export async function portalAccountController(req: Request, res: Response) {
+  const result = await service.createPortalAccount(req.params.id);
+  res.status(201).json(result);
+}
+
 // Posibles duplicados (grupos por nombre normalizado).
 export async function duplicatesController(_req: Request, res: Response) {
   const groups = await service.findDuplicateGroups();

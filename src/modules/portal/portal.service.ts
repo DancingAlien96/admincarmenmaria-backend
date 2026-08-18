@@ -1,6 +1,27 @@
 import { prisma } from "../../lib/prisma.js";
-import { notFound, forbidden } from "../../lib/http-error.js";
+import { notFound, forbidden, badRequest } from "../../lib/http-error.js";
 import { normalizeName } from "../../lib/normalize.js";
+import { hashPassword, verifyPassword } from "../../lib/auth.js";
+
+// El alumno cambia su contraseña (verifica la actual).
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string
+) {
+  if (newPassword.length < 6) {
+    throw badRequest("La nueva contraseña debe tener al menos 6 caracteres");
+  }
+  const u = await prisma.user.findUnique({ where: { id: userId } });
+  if (!u) throw notFound("Cuenta no encontrada");
+  const ok = await verifyPassword(currentPassword, u.passwordHash);
+  if (!ok) throw badRequest("La contraseña actual no es correcta");
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await hashPassword(newPassword) },
+  });
+  return { ok: true };
+}
 
 // Resuelve el expediente vinculado a la cuenta y arma su dashboard.
 export async function getDashboardForUser(userId: string) {

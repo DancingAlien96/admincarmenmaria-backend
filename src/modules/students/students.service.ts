@@ -1,7 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
-import { notFound, badRequest } from "../../lib/http-error.js";
+import { notFound, badRequest, conflict } from "../../lib/http-error.js";
 import { deleteFile } from "../../lib/storage.js";
+import { hashPassword } from "../../lib/auth.js";
+import { assignExpedienteIfMissing } from "../../lib/expediente.js";
 import { normalizeName } from "../../lib/normalize.js";
 import { apellidoNombre, compareByApellido } from "../../lib/name-order.js";
 import { migrateStudentToGraduate } from "../graduates/graduates.service.js";
@@ -243,6 +245,47 @@ export async function deleteDocument(studentId: string, docId: string) {
   // Borra el archivo fisico del disco (no falla si ya no existe).
   await deleteFile(doc.fileKey);
   return { ok: true };
+}
+
+// Crea la cuenta del portal para un estudiante con una contraseña por defecto
+// (su DPI; o el número de expediente si no tiene DPI). El alumno puede
+// cambiarla luego desde el portal.
+export async function createPortalAccount(studentId: string) {
+  const student = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { id: true, fullName: true, email: true, dpi: true, expedienteNumber: true },
+  });
+  if (!student) throw notFound("Expediente no encontrado");
+  if (!student.email) {
+    throw badRequest(
+      "El expediente no tiene correo. Agrégale un correo antes de crear su acceso."
+    );
+  }
+  const existing = await prisma.user.findFirst({ where: { studentId } });
+  if (existing) throw conflict("Este estudiante ya tiene una cuenta de acceso");
+
+  const emailTaken = await prisma.user.findUnique({ where: { email: student.email } });
+  if (emailTaken) throw conflict("Ese correo ya está usado por otra cuenta");
+
+  await assignExpedienteIfMissing(studentId);
+  const expediente = (
+    await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { expedienteNumber: true },
+    })
+  )?.expedienteNumber;
+
+  const defaultPassword = student.dpi?.trim() || expediente || student.id.slice(-8);
+  await prisma.user.create({
+    data: {
+      name: student.fullName,
+      email: student.email,
+      passwordHash: await hashPassword(defaultPassword),
+      role: "ESTUDIANTE",
+      studentId,
+    },
+  });
+  return { email: student.email, defaultPassword };
 }
 
 // --- Integridad: deteccion y fusion de expedientes duplicados ---------------
