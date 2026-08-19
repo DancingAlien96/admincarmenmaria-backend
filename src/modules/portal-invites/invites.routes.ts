@@ -24,13 +24,14 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: env.MAX_UPLOAD_MB * 1024 * 1024 },
 });
-const ALLOWED_IMG = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/bmp",
-  "image/tiff",
-]);
+// Los teléfonos suben en formatos muy variados (HEIC/HEIF de iPhone, webp,
+// etc.). Aceptamos cualquier imagen y el servidor la convierte a JPEG liviano
+// (sharp soporta HEIF de entrada). Algunos móviles mandan mimetype vacío u
+// "octet-stream", por eso también se valida por extensión.
+const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|avif|bmp|tiff?|gif)$/i;
+function looksLikeImage(mimetype?: string, name?: string) {
+  return (mimetype?.startsWith("image/") ?? false) || IMG_EXT.test(name ?? "");
+}
 
 // Generar invitación (solo administrador).
 invitesRouter.post(
@@ -59,14 +60,23 @@ invitesRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     await assertInviteValid(req.params.token);
     if (!req.file) throw badRequest("No se recibió ninguna foto");
-    if (!ALLOWED_IMG.has(req.file.mimetype)) {
-      throw badRequest("La foto debe ser una imagen (JPG o PNG)");
+    if (!looksLikeImage(req.file.mimetype, req.file.originalname)) {
+      throw badRequest("El archivo debe ser una imagen");
     }
-    const stored = await storeFile(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype
-    );
+    // storeFile convierte cualquier imagen (incluido HEIC de iPhone) a JPEG
+    // optimizado. Si el formato no se pudo decodificar, error amable.
+    let stored;
+    try {
+      stored = await storeFile(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype
+      );
+    } catch {
+      throw badRequest(
+        "No se pudo procesar la foto. Intenta con otra imagen (JPG o PNG)."
+      );
+    }
     res.status(201).json(stored);
   })
 );

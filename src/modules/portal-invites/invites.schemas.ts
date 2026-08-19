@@ -16,7 +16,11 @@ const registerGuardianSchema = z.object({
 
 export const registerSchema = z.object({
   email: z.string().email("Correo inválido").trim(),
-  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
+  // Opcional: en la inscripción la contraseña por defecto es el DPI del alumno.
+  password: z
+    .string()
+    .min(6, "La contraseña debe tener al menos 6 caracteres")
+    .optional(),
   fullName: z.string().trim().optional(),
   dpi: z.string().trim().optional(),
   birthDate: z.string().trim().optional(),

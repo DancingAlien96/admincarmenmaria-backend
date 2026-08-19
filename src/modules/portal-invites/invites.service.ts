@@ -77,7 +77,7 @@ export interface RegisterGuardian {
 }
 
 export interface RegisterInput {
-  password: string;
+  password?: string;
   email: string;
   fullName?: string;
   dpi?: string;
@@ -191,11 +191,20 @@ export async function registerFromInvite(token: string, data: RegisterInput) {
     where: { id: studentId },
     select: { fullName: true, email: true },
   });
+
+  // En la inscripción la contraseña por defecto es el DPI (sin espacios); el
+  // alumno la cambia luego en el portal. En la activación la define el alumno.
+  const dpiClean = data.dpi?.replace(/\s+/g, "");
+  const effectivePassword = inv.studentId ? data.password : dpiClean;
+  if (!effectivePassword || effectivePassword.length < 6) {
+    throw badRequest("No se pudo definir la contraseña de acceso.");
+  }
+
   const user = await prisma.user.create({
     data: {
       name: student?.fullName ?? "Estudiante",
       email: data.email,
-      passwordHash: await hashPassword(data.password),
+      passwordHash: await hashPassword(effectivePassword),
       role: "ESTUDIANTE",
       studentId,
     },
