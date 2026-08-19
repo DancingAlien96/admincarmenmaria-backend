@@ -10,6 +10,9 @@ import {
   listChargesQuery,
   chargeIdParam,
   cuotaPlanSchema,
+  applyCohortSchema,
+  createPlanItemSchema,
+  updatePlanItemSchema,
 } from "./charges.schemas.js";
 import {
   listController,
@@ -18,6 +21,11 @@ import {
   annulController,
   accountController,
   planController,
+  applyCohortController,
+  listPlanTemplateController,
+  createPlanItemController,
+  updatePlanItemController,
+  deletePlanItemController,
 } from "./charges.controller.js";
 
 export const chargesRouter = Router();
@@ -27,6 +35,38 @@ const canRead = requireSection("PAYMENTS", "READER");
 const canEdit = requireSection("PAYMENTS", "EDITOR");
 
 chargesRouter.use(requireAuth);
+
+// --- Plan de cuotas general (plantilla). Rutas fijas antes de "/:id" ---------
+chargesRouter.get(
+  "/plan-template",
+  canRead,
+  asyncHandler(listPlanTemplateController)
+);
+chargesRouter.post(
+  "/plan-template",
+  canEdit,
+  validate({ body: createPlanItemSchema }),
+  asyncHandler(createPlanItemController)
+);
+chargesRouter.patch(
+  "/plan-template/:id",
+  canEdit,
+  validate({ params: chargeIdParam, body: updatePlanItemSchema }),
+  asyncHandler(updatePlanItemController)
+);
+chargesRouter.delete(
+  "/plan-template/:id",
+  canEdit,
+  validate({ params: chargeIdParam }),
+  asyncHandler(deletePlanItemController)
+);
+// Aplicar el plan general a toda una cohorte
+chargesRouter.post(
+  "/apply-cohort",
+  canEdit,
+  validate({ body: applyCohortSchema }),
+  asyncHandler(applyCohortController)
+);
 
 chargesRouter.get(
   "/",

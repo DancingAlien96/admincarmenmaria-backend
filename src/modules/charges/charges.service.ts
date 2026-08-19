@@ -7,6 +7,9 @@ import type {
   AnnulChargeInput,
   ListChargesQuery,
   CuotaPlanInput,
+  ApplyCohortInput,
+  CreatePlanItemInput,
+  UpdatePlanItemInput,
 } from "./charges.schemas.js";
 
 // Suma neta (monto - descuento) de pagos ACTIVOS por cargo
@@ -164,8 +167,92 @@ export async function recomputeChargeStatus(chargeId: string) {
   }
 }
 
-// Genera el plan de cuotas estándar de un estudiante (Admisión + N
-// mensualidades + Trámite). Base del "mayor orden" del portal 2027.
+// --- Plan de cuotas GENERAL (plantilla, editable por el admin) --------------
+
+export function listPlanTemplate(includeInactive = false) {
+  return prisma.cuotaPlanItem.findMany({
+    where: includeInactive ? {} : { active: true },
+    orderBy: [{ order: "asc" }, { monthOffset: "asc" }],
+  });
+}
+
+export async function createPlanItem(input: CreatePlanItemInput) {
+  const last = await prisma.cuotaPlanItem.findFirst({
+    orderBy: { order: "desc" },
+    select: { order: true },
+  });
+  return prisma.cuotaPlanItem.create({
+    data: {
+      concept: input.concept,
+      amount: input.amount,
+      monthOffset: input.monthOffset,
+      order: (last?.order ?? 0) + 1,
+    },
+  });
+}
+
+export async function updatePlanItem(id: string, input: UpdatePlanItemInput) {
+  const existing = await prisma.cuotaPlanItem.findUnique({ where: { id } });
+  if (!existing) throw notFound("Cuota del plan no encontrada");
+  return prisma.cuotaPlanItem.update({
+    where: { id },
+    data: {
+      concept: input.concept ?? undefined,
+      amount: input.amount ?? undefined,
+      monthOffset: input.monthOffset ?? undefined,
+      active: input.active ?? undefined,
+    },
+  });
+}
+
+export async function deactivatePlanItem(id: string) {
+  const existing = await prisma.cuotaPlanItem.findUnique({ where: { id } });
+  if (!existing) throw notFound("Cuota del plan no encontrada");
+  return prisma.cuotaPlanItem.update({
+    where: { id },
+    data: { active: false },
+  });
+}
+
+// Crea los Charge de un estudiante a partir del plan general. Devuelve
+// "created" (cuántas cuotas se crearon) o "skipped" si ya tenía cuotas.
+async function buildChargesFromPlan(
+  studentId: string,
+  startMonth: string,
+  userId: string | undefined,
+  tx: Prisma.TransactionClient = prisma
+): Promise<number> {
+  const existing = await tx.charge.count({
+    where: { studentId, status: { not: "ANULADO" } },
+  });
+  if (existing > 0) return 0; // ya tiene plan; no se duplica
+
+  const [y, m] = startMonth.split("-").map(Number);
+  if (!y || !m) throw badRequest("Mes de inicio inválido (formato AAAA-MM)");
+
+  const items = await tx.cuotaPlanItem.findMany({
+    where: { active: true },
+    orderBy: [{ order: "asc" }, { monthOffset: "asc" }],
+  });
+  if (items.length === 0) {
+    throw badRequest(
+      "El plan de cuotas general está vacío. Configúralo antes de aplicarlo."
+    );
+  }
+
+  const data: Prisma.ChargeCreateManyInput[] = items.map((it) => ({
+    studentId,
+    concept: it.concept,
+    amount: it.amount,
+    // Vence el día 1 del mes correspondiente (UTC para no correrse por zona).
+    dueDate: new Date(Date.UTC(y, m - 1 + it.monthOffset, 1)),
+    createdById: userId,
+  }));
+  const res = await tx.charge.createMany({ data });
+  return res.count;
+}
+
+// Aplica el plan general a un estudiante (elige solo el mes de inicio).
 export async function generateCuotaPlan(
   studentId: string,
   input: CuotaPlanInput,
@@ -183,44 +270,43 @@ export async function generateCuotaPlan(
     );
   }
 
-  const [y, m] = input.startMonth.split("-").map(Number);
-  if (!y || !m) throw badRequest("Mes de inicio inválido (formato AAAA-MM)");
+  const created = await buildChargesFromPlan(
+    studentId,
+    input.startMonth,
+    userId
+  );
+  return { created };
+}
 
-  // Vence el día 1 del mes correspondiente (UTC para no correrse por zona).
-  const dueOn = (monthsAhead: number) =>
-    new Date(Date.UTC(y, m - 1 + monthsAhead, 1));
+// Aplica el plan general a toda una cohorte (estudiantes inscritos en un año,
+// activos, sin cuotas previas). Los que ya tienen plan se omiten.
+export async function applyPlanToCohort(
+  input: ApplyCohortInput,
+  userId?: string
+) {
+  const start = new Date(Date.UTC(input.year, 0, 1));
+  const end = new Date(Date.UTC(input.year + 1, 0, 1));
+  const students = await prisma.student.findMany({
+    where: {
+      archived: false,
+      status: "ACTIVO",
+      enrollmentDate: { gte: start, lt: end },
+    },
+    select: { id: true },
+  });
 
-  const data: Prisma.ChargeCreateManyInput[] = [];
-  if (input.inscripcion > 0) {
-    data.push({
-      studentId,
-      concept: "Admisión",
-      amount: input.inscripcion,
-      dueDate: dueOn(0),
-      createdById: userId,
-    });
+  let applied = 0;
+  let skipped = 0;
+  for (const s of students) {
+    const created = await buildChargesFromPlan(
+      s.id,
+      input.startMonth,
+      userId
+    );
+    if (created > 0) applied++;
+    else skipped++;
   }
-  for (let i = 1; i <= input.numCuotas; i++) {
-    data.push({
-      studentId,
-      concept: `Cuota ${i}`,
-      amount: input.mensualidad,
-      dueDate: dueOn(i),
-      createdById: userId,
-    });
-  }
-  if (input.tramite > 0) {
-    data.push({
-      studentId,
-      concept: "Trámite de título",
-      amount: input.tramite,
-      dueDate: dueOn(input.numCuotas + 1),
-      createdById: userId,
-    });
-  }
-
-  const res = await prisma.charge.createMany({ data });
-  return { created: res.count };
+  return { total: students.length, applied, skipped };
 }
 
 // Estado de cuenta de un estudiante: cargos + totales

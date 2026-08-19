@@ -35,3 +35,30 @@ export async function planController(req: Request, res: Response) {
   );
   res.status(201).json(result);
 }
+
+export async function applyCohortController(req: Request, res: Response) {
+  const result = await service.applyPlanToCohort(req.body, req.user?.id);
+  res.json(result);
+}
+
+// --- Plan de cuotas general (plantilla) -------------------------------------
+
+export async function listPlanTemplateController(req: Request, res: Response) {
+  const includeInactive = req.query.all === "true";
+  res.json({ items: await service.listPlanTemplate(includeInactive) });
+}
+
+export async function createPlanItemController(req: Request, res: Response) {
+  const item = await service.createPlanItem(req.body);
+  res.status(201).json({ item });
+}
+
+export async function updatePlanItemController(req: Request, res: Response) {
+  const item = await service.updatePlanItem(req.params.id, req.body);
+  res.json({ item });
+}
+
+export async function deletePlanItemController(req: Request, res: Response) {
+  const item = await service.deactivatePlanItem(req.params.id);
+  res.json({ item });
+}
