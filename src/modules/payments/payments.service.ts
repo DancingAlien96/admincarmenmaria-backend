@@ -384,35 +384,6 @@ export async function relinkOrphanPayments() {
   return { total: orphans.length, linked, remaining: orphans.length - linked };
 }
 
-// Crea un estudiante nuevo a partir de los datos de un pago de inscripcion.
-// Sin DPI (se completa luego). Registra el historial inicial.
-async function createStudentFromPayment(data: {
-  fullName: string;
-  email?: string;
-  phone?: string;
-  sede?: string | null;
-  enrollmentDate?: Date; // fecha del pago de inscripcion (ciclo real)
-}): Promise<string> {
-  const student = await prisma.student.create({
-    data: {
-      fullName: data.fullName || "Estudiante sin nombre",
-      email: data.email || null,
-      phonePrimary: data.phone || null,
-      sede: data.sede ?? null,
-      status: "ACTIVO",
-      // La inscripcion real es la fecha del pago, no la de hoy.
-      ...(data.enrollmentDate ? { enrollmentDate: data.enrollmentDate } : {}),
-      statusHistory: {
-        create: {
-          toStatus: "ACTIVO",
-          reason: "Alta automatica por pago de inscripcion",
-        },
-      },
-    },
-  });
-  return student.id;
-}
-
 export async function syncWooCommerce(options: { full?: boolean } = {}) {
   // Por defecto solo trae pedidos de los ultimos 120 dias; full=true trae todo
   let after: string | undefined;
@@ -491,22 +462,11 @@ export async function syncWooCommerce(options: { full?: boolean } = {}) {
       } else {
         const concept = orderConcept(order);
         // Vincula por correo o por nombre normalizado (evita duplicados).
-        let studentId = findInIndex(idx, order.billing.email, payerName);
-        // Si es un pago de inscripcion y no existe el estudiante, lo creamos.
-        if (!studentId && isInscripcionConcept(concept)) {
-          studentId = await createStudentFromPayment({
-            fullName: payerName,
-            email: order.billing.email,
-            phone: order.billing.phone,
-            sede,
-            enrollmentDate: paidAt,
-          });
-          // Registra el nuevo estudiante en el indice para los siguientes pagos.
-          const emailKey = order.billing.email?.toLowerCase();
-          if (emailKey) idx.byEmail.set(emailKey, studentId);
-          const nameKey = normalizeName(payerName);
-          if (nameKey && !idx.byName.has(nameKey)) idx.byName.set(nameKey, studentId);
-        } else if (sede && studentId) {
+        const studentId = findInIndex(idx, order.billing.email, payerName);
+        // WooCommerce ya NO crea expedientes: los expedientes se crean solo
+        // desde el sistema. Los pagos de personas sin expediente llegan "sin
+        // vincular" para enlazarlos a mano al expediente creado en el sistema.
+        if (sede && studentId) {
           // Estudiante existente sin sede: la hereda de este pago.
           await prisma.student.updateMany({
             where: { id: studentId, sede: null },
