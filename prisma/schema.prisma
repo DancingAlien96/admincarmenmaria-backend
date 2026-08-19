@@ -104,6 +104,9 @@ model Student {
   phonePrimary   String?
   phoneAlt       String?
   email          String?
+  // Foto del estudiante (subida en la inscripcion). Archivo propio en /uploads.
+  photoUrl       String?  @db.Text
+  photoKey       String?
   // Sede en la que se inscribio (Chiquimula / Morales Izabal). Derivada del
   // pago de admision de WooCommerce; editable a mano.
   sede           String?

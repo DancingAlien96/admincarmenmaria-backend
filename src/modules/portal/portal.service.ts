@@ -107,6 +107,7 @@ export async function getStudentDashboard(studentId: string) {
       enrollmentDate: true,
       email: true,
       phonePrimary: true,
+      photoUrl: true,
       _count: { select: { documents: true } },
     },
   });
@@ -158,6 +159,7 @@ export async function getStudentDashboard(studentId: string) {
       enrollmentDate: s.enrollmentDate,
       email: s.email,
       phonePrimary: s.phonePrimary,
+      photoUrl: s.photoUrl,
     },
     pagosRealizados: payments.length,
     totalPagado,
