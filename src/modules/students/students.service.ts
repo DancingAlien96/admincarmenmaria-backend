@@ -104,6 +104,8 @@ export async function createStudent(
       fullName: input.fullName,
       dpi: clean(input.dpi),
       birthDate: input.birthDate,
+      // Si no se envía, Prisma usa el default (hoy).
+      enrollmentDate: input.enrollmentDate ?? undefined,
       department: clean(input.department),
       municipality: clean(input.municipality),
       address: clean(input.address),
@@ -160,6 +162,8 @@ export async function updateStudent(id: string, input: UpdateStudentInput) {
         fullName: input.fullName,
         dpi: input.dpi !== undefined ? clean(input.dpi) : undefined,
         birthDate: input.birthDate,
+        // Editable para corregir la cohorte (null/ausente = sin cambio).
+        enrollmentDate: input.enrollmentDate ?? undefined,
         department:
           input.department !== undefined ? clean(input.department) : undefined,
         municipality:

@@ -31,6 +31,9 @@ export const createStudentSchema = z.object({
   // DPI opcional: estudiantes creados desde un pago lo completan despues.
   dpi: z.string().trim().optional().or(z.literal("")),
   birthDate: optionalDate,
+  // Fecha de inscripcion: define la cohorte/promocion (mora, estadisticas,
+  // plan de cuotas por cohorte). Editable para inscripciones adelantadas.
+  enrollmentDate: optionalDate,
   department: z.string().trim().optional(),
   municipality: z.string().trim().optional(),
   address: z.string().trim().optional(),
