@@ -4,6 +4,7 @@ import { notFound, badRequest, conflict } from "../../lib/http-error.js";
 import { deleteFile } from "../../lib/storage.js";
 import { hashPassword } from "../../lib/auth.js";
 import { assignExpedienteIfMissing } from "../../lib/expediente.js";
+import { sendWelcomeEmail } from "../../lib/mailer.js";
 import { normalizeName } from "../../lib/normalize.js";
 import { apellidoNombre, compareByApellido } from "../../lib/name-order.js";
 import { migrateStudentToGraduate } from "../graduates/graduates.service.js";
@@ -304,6 +305,14 @@ export async function createPortalAccount(studentId: string) {
       studentId,
     },
   });
+
+  // Correo de bienvenida al Campus (no rompe la creación si el correo falla).
+  await sendWelcomeEmail({
+    to: student.email,
+    name: student.fullName,
+    password: defaultPassword,
+  });
+
   return { email: student.email, defaultPassword, reset: false };
 }
 

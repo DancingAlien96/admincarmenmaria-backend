@@ -22,6 +22,12 @@ export const registerSchema = z.object({
     .min(6, "La contraseña debe tener al menos 6 caracteres")
     .optional(),
   fullName: z.string().trim().optional(),
+  primerNombre: z.string().trim().optional(),
+  segundoNombre: z.string().trim().optional(),
+  tercerNombre: z.string().trim().optional(),
+  primerApellido: z.string().trim().optional(),
+  segundoApellido: z.string().trim().optional(),
+  tercerApellido: z.string().trim().optional(),
   dpi: z.string().trim().optional(),
   birthDate: z.string().trim().optional(),
   department: z.string().trim().optional(),

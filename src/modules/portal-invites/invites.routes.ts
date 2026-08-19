@@ -15,6 +15,10 @@ import {
   registerFromInvite,
   assertInviteValid,
 } from "./invites.service.js";
+import {
+  areInscripcionesOpen,
+  setInscripcionesOpen,
+} from "../../lib/settings.js";
 
 export const invitesRouter = Router();
 
@@ -42,6 +46,27 @@ invitesRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const invite = await createInvite(req.body, req.user?.id);
     res.status(201).json({ token: invite.token });
+  })
+);
+
+// Estado del interruptor de inscripciones (solo admin).
+invitesRouter.get(
+  "/admin/settings",
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (_req: Request, res: Response) => {
+    res.json({ inscripcionesAbiertas: await areInscripcionesOpen() });
+  })
+);
+
+// Abrir/cerrar las inscripciones por link (solo admin).
+invitesRouter.post(
+  "/admin/settings",
+  requireAuth,
+  requireAdmin,
+  asyncHandler(async (req: Request, res: Response) => {
+    await setInscripcionesOpen(Boolean(req.body?.open));
+    res.json({ inscripcionesAbiertas: await areInscripcionesOpen() });
   })
 );
 

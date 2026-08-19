@@ -4,6 +4,8 @@ import { hashPassword, signToken } from "../../lib/auth.js";
 import { badRequest, notFound, conflict } from "../../lib/http-error.js";
 import { normalizeName } from "../../lib/normalize.js";
 import { nextExpediente } from "../../lib/expediente.js";
+import { sendWelcomeEmail } from "../../lib/mailer.js";
+import { areInscripcionesOpen } from "../../lib/settings.js";
 
 // El admin genera una invitación. Con studentId = activar acceso de un
 // expediente existente; sin studentId = inscripción nueva.
@@ -61,6 +63,10 @@ export async function getInvitePublic(token: string) {
       sede: s?.sede ?? null,
     };
   }
+  // Inscripción nueva: si el admin cerró las inscripciones, se avisa.
+  if (!(await areInscripcionesOpen())) {
+    return { mode: "cerrado" as const };
+  }
   return {
     mode: "inscripcion" as const,
     prefillName: inv.prefillName,
@@ -80,6 +86,12 @@ export interface RegisterInput {
   password?: string;
   email: string;
   fullName?: string;
+  primerNombre?: string;
+  segundoNombre?: string;
+  tercerNombre?: string;
+  primerApellido?: string;
+  segundoApellido?: string;
+  tercerApellido?: string;
   dpi?: string;
   birthDate?: string;
   department?: string;
@@ -94,10 +106,26 @@ export interface RegisterInput {
   guardians?: RegisterGuardian[];
 }
 
+// Arma el nombre completo a partir de las partes (en orden: nombres, apellidos).
+export function composeFullName(d: RegisterInput): string {
+  return [
+    d.primerNombre,
+    d.segundoNombre,
+    d.tercerNombre,
+    d.primerApellido,
+    d.segundoApellido,
+    d.tercerApellido,
+  ]
+    .map((p) => p?.trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
 // Verifica que la inscripción nueva traiga TODOS los datos obligatorios.
 function assertInscripcionComplete(data: RegisterInput) {
   const req: [keyof RegisterInput, string][] = [
-    ["fullName", "el nombre completo"],
+    ["primerNombre", "el primer nombre"],
+    ["primerApellido", "el primer apellido"],
     ["dpi", "el DPI"],
     ["birthDate", "la fecha de nacimiento"],
     ["department", "el departamento"],
@@ -126,15 +154,20 @@ export async function registerFromInvite(token: string, data: RegisterInput) {
     // Modo activación: el expediente ya existe (solo crea la cuenta).
     studentId = inv.studentId;
   } else {
-    // Inscripción nueva: se exigen todos los datos del expediente.
+    // Inscripción nueva: bloqueada si el admin cerró las inscripciones.
+    if (!(await areInscripcionesOpen())) {
+      throw badRequest("Las inscripciones están cerradas por el momento.");
+    }
+    // Se exigen todos los datos del expediente.
     assertInscripcionComplete(data);
+    const fullName = composeFullName(data) || data.fullName || "Estudiante";
 
     // Evita duplicar por DPI o por nombre.
     let existing = data.dpi
       ? await prisma.student.findFirst({ where: { dpi: data.dpi } })
       : null;
-    if (!existing && data.fullName) {
-      const key = normalizeName(data.fullName);
+    if (!existing && fullName) {
+      const key = normalizeName(fullName);
       const all = await prisma.student.findMany({ select: { id: true, fullName: true } });
       const match = all.find((s) => normalizeName(s.fullName) === key);
       if (match) existing = await prisma.student.findUnique({ where: { id: match.id } });
@@ -151,7 +184,13 @@ export async function registerFromInvite(token: string, data: RegisterInput) {
     const expediente = await nextExpediente(year);
     const created = await prisma.student.create({
       data: {
-        fullName: data.fullName!,
+        fullName,
+        primerNombre: data.primerNombre || null,
+        segundoNombre: data.segundoNombre || null,
+        tercerNombre: data.tercerNombre || null,
+        primerApellido: data.primerApellido || null,
+        segundoApellido: data.segundoApellido || null,
+        tercerApellido: data.tercerApellido || null,
         dpi: data.dpi || null,
         birthDate: data.birthDate ? new Date(data.birthDate) : null,
         enrollmentDate: new Date(Date.UTC(year, 0, 1)),
@@ -210,6 +249,13 @@ export async function registerFromInvite(token: string, data: RegisterInput) {
   if (student && !student.email) {
     await prisma.student.update({ where: { id: studentId }, data: { email: data.email } });
   }
+
+  // Correo de bienvenida al Campus (no rompe el registro si el correo falla).
+  await sendWelcomeEmail({
+    to: data.email,
+    name: student?.fullName ?? "Estudiante",
+    password: effectivePassword,
+  });
 
   // El link de inscripción es reutilizable (varios alumnos con el mismo link).
   // El de activación (un expediente puntual) sí se marca como usado.

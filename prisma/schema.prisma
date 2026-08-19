@@ -91,7 +91,17 @@ model Student {
   id             String        @id @default(cuid())
   // Correlativo visible del expediente (ej. AE-2025-0147)
   expedienteNumber String?     @unique
+  // Nombre completo (compuesto de las partes; sigue siendo la fuente para
+  // mostrar, buscar y cruzar con actas).
   fullName       String
+  // Nombre desglosado (capturado en la inscripcion). El tercer apellido es
+  // opcional. Pueden faltar en expedientes antiguos.
+  primerNombre    String?
+  segundoNombre   String?
+  tercerNombre    String?
+  primerApellido  String?
+  segundoApellido String?
+  tercerApellido  String?
   // Opcional: los estudiantes creados desde un pago aun no tienen DPI.
   // Sigue siendo unico cuando esta presente (MySQL permite varios NULL).
   dpi            String?       @unique // Identificacion oficial, no repetible
@@ -360,6 +370,14 @@ model Charge {
   @@index([studentId])
   @@index([status])
   @@index([dueDate])
+}
+
+// Ajustes globales del sistema (clave/valor). Ej. si las inscripciones por
+// link están abiertas o cerradas.
+model AppSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
 }
 
 // Plan de cuotas GENERAL (plantilla). El admin lo define una sola vez; al
