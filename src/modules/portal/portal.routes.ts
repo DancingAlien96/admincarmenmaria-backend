@@ -9,6 +9,7 @@ import {
   getDocumentosForUser,
   getNotificacionesForUser,
   getFasesForUser,
+  submitBoleta,
 } from "./portal.service.js";
 
 export const portalRouter = Router();
@@ -52,6 +53,16 @@ portalRouter.get(
   "/fases",
   asyncHandler(async (req: Request, res: Response) => {
     res.json(await getFasesForUser(req.user!.id));
+  })
+);
+
+// El alumno sube la boleta de una cuota (queda en revisión).
+portalRouter.post(
+  "/cuotas/:chargeId/boleta",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(
+      await submitBoleta(req.user!.id, req.params.chargeId, req.body ?? {})
+    );
   })
 );
 

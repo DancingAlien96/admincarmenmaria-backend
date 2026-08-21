@@ -331,11 +331,14 @@ enum PaymentMethod {
 enum PaymentSource {
   MANUAL // registrado por el personal
   WOOCOMMERCE // sincronizado desde la tienda
+  PORTAL // boleta subida por el propio estudiante
 }
 
 enum PaymentStatus {
   ACTIVO
   ANULADO // no se elimina; se anula con trazabilidad
+  EN_REVISION // boleta subida por el alumno, pendiente de aprobación
+  RECHAZADO // boleta rechazada por el personal
 }
 
 model Payment {

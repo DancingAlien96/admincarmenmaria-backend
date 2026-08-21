@@ -21,6 +21,9 @@ import {
   linkManyController,
   syncController,
   receiptController,
+  pendingController,
+  approveController,
+  rejectController,
 } from "./payments.controller.js";
 
 export const paymentsRouter = Router();
@@ -43,6 +46,21 @@ paymentsRouter.post(
   asyncHandler(createController)
 );
 paymentsRouter.post("/sync", canEdit, asyncHandler(syncController));
+
+// Boletas subidas por alumnos, pendientes de revisión (rutas fijas antes de "/:id")
+paymentsRouter.get("/pending", canRead, asyncHandler(pendingController));
+paymentsRouter.post(
+  "/:id/approve",
+  canEdit,
+  validate({ params: paymentIdParam }),
+  asyncHandler(approveController)
+);
+paymentsRouter.post(
+  "/:id/reject",
+  canEdit,
+  validate({ params: paymentIdParam }),
+  asyncHandler(rejectController)
+);
 
 // Vinculacion asistida (rutas fijas antes de "/:id")
 paymentsRouter.get(

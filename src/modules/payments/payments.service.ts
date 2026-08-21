@@ -204,6 +204,70 @@ export async function annulPayment(
   return serialize(updated);
 }
 
+// --- Boletas subidas por el alumno (revisión del personal) ------------------
+
+// Pagos en revisión (boletas subidas por estudiantes), con datos del alumno.
+export async function listPendingPayments() {
+  const rows = await prisma.payment.findMany({
+    where: { status: "EN_REVISION" },
+    orderBy: { createdAt: "asc" },
+    include: {
+      student: {
+        select: { id: true, fullName: true, expedienteNumber: true, sede: true },
+      },
+    },
+  });
+  return rows.map((p) => ({
+    id: p.id,
+    concept: p.concept,
+    amount: Number(p.amount),
+    method: p.method,
+    paidAt: p.paidAt,
+    receiptUrl: p.receiptUrl,
+    student: p.student,
+  }));
+}
+
+// Aprueba una boleta: el pago pasa a ACTIVO y se recalcula la cuota.
+export async function approvePayment(id: string, userId?: string) {
+  const payment = await prisma.payment.findUnique({ where: { id } });
+  if (!payment) throw notFound("Pago no encontrado");
+  if (payment.status !== "EN_REVISION") {
+    throw badRequest("Este pago no está en revisión");
+  }
+  const updated = await prisma.payment.update({
+    where: { id },
+    data: { status: "ACTIVO", registeredById: userId },
+    include,
+  });
+  if (payment.chargeId) await recomputeChargeStatus(payment.chargeId);
+  return serialize(updated);
+}
+
+// Rechaza una boleta (con motivo). No cuenta para la cuota.
+export async function rejectPayment(
+  id: string,
+  reason: string | undefined,
+  userId?: string
+) {
+  const payment = await prisma.payment.findUnique({ where: { id } });
+  if (!payment) throw notFound("Pago no encontrado");
+  if (payment.status !== "EN_REVISION") {
+    throw badRequest("Este pago no está en revisión");
+  }
+  const updated = await prisma.payment.update({
+    where: { id },
+    data: {
+      status: "RECHAZADO",
+      annulReason: reason || null,
+      annulledById: userId,
+      annulledAt: new Date(),
+    },
+    include,
+  });
+  return serialize(updated);
+}
+
 // Vincula un pago (tipicamente de Woo) a un estudiante
 export async function linkPayment(id: string, studentId: string) {
   const [payment, student] = await Promise.all([

@@ -23,13 +23,22 @@ export async function getCuotasForUser(userId: string) {
   const studentId = await requireStudentId(userId);
   const { charges, summary } = await studentAccount(studentId);
 
+  // Cuotas con una boleta en revisión (subida por el alumno).
+  const pendientes = await prisma.payment.findMany({
+    where: { studentId, status: "EN_REVISION", chargeId: { not: null } },
+    select: { chargeId: true },
+  });
+  const enRevision = new Set(pendientes.map((p) => p.chargeId));
+
   const cuotas = charges
     // Orden cronológico ascendente para la línea de tiempo.
     .slice()
     .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime())
     .map((c) => {
-      const estado =
-        c.status === "PAGADO" || c.saldo <= 0
+      const revision = enRevision.has(c.id) && c.status !== "PAGADO";
+      const estado = revision
+        ? "en_revision"
+        : c.status === "PAGADO" || c.saldo <= 0
           ? "pagado"
           : c.overdue
             ? "vencido"
@@ -53,6 +62,47 @@ export async function getCuotasForUser(userId: string) {
     summary,
     progress: { pagadas, total: cuotas.length },
   };
+}
+
+// El alumno sube la boleta de una cuota (queda EN_REVISION hasta que el
+// personal la apruebe).
+export async function submitBoleta(
+  userId: string,
+  chargeId: string,
+  input: { amount: number; method?: string; receiptUrl?: string; receiptKey?: string }
+) {
+  const studentId = await requireStudentId(userId);
+  const charge = await prisma.charge.findUnique({ where: { id: chargeId } });
+  if (!charge || charge.studentId !== studentId) {
+    throw notFound("Cuota no encontrada");
+  }
+  if (charge.status === "PAGADO") throw badRequest("Esta cuota ya está pagada");
+  if (!input.receiptUrl) throw badRequest("Adjunta la imagen o PDF de tu boleta");
+  const existing = await prisma.payment.findFirst({
+    where: { chargeId, status: "EN_REVISION" },
+  });
+  if (existing) {
+    throw badRequest("Ya tienes una boleta en revisión para esta cuota");
+  }
+  const allowed = ["EFECTIVO", "TRANSFERENCIA", "DEPOSITO", "TARJETA"] as const;
+  const method = (allowed as readonly string[]).includes(input.method ?? "")
+    ? (input.method as (typeof allowed)[number])
+    : "DEPOSITO";
+
+  await prisma.payment.create({
+    data: {
+      studentId,
+      chargeId,
+      concept: charge.concept,
+      amount: input.amount,
+      method,
+      source: "PORTAL",
+      status: "EN_REVISION",
+      receiptUrl: input.receiptUrl || null,
+      receiptKey: input.receiptKey || null,
+    },
+  });
+  return { ok: true };
 }
 
 // Checklist de documentación del alumno logueado (portal · Documentación).

@@ -33,6 +33,24 @@ export async function annulController(req: Request, res: Response) {
   res.json({ payment });
 }
 
+export async function pendingController(_req: Request, res: Response) {
+  res.json({ payments: await service.listPendingPayments() });
+}
+
+export async function approveController(req: Request, res: Response) {
+  const payment = await service.approvePayment(req.params.id, req.user?.id);
+  res.json({ payment });
+}
+
+export async function rejectController(req: Request, res: Response) {
+  const payment = await service.rejectPayment(
+    req.params.id,
+    req.body?.reason,
+    req.user?.id
+  );
+  res.json({ payment });
+}
+
 export async function linkController(req: Request, res: Response) {
   const payment = await service.linkPayment(req.params.id, req.body.studentId);
   res.json({ payment });
