@@ -60,6 +60,88 @@ export async function getDocumentosForUser(userId: string) {
   return getStudentChecklist(studentId);
 }
 
+// Días entre hoy y una fecha (solo fecha, sin hora).
+function daysBetween(due: Date): number {
+  const now = new Date();
+  const a = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const b = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate());
+  return Math.round((b - a) / 86400000);
+}
+
+type Notif = {
+  id: string;
+  tipo: "pago" | "documento";
+  titulo: string;
+  detalle: string;
+  fecha: Date | null;
+  prioridad: "alta" | "media" | "baja";
+};
+
+const money = (n: number) =>
+  `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// Notificaciones del alumno (portal): cuotas por vencer/mora + documentos
+// pendientes. Se calculan al vuelo (sin persistencia de leído/no leído).
+export async function getNotificacionesForUser(userId: string) {
+  const studentId = await requireStudentId(userId);
+  const [{ charges }, checklist] = await Promise.all([
+    studentAccount(studentId),
+    getStudentChecklist(studentId),
+  ]);
+
+  const items: Notif[] = [];
+
+  for (const c of charges) {
+    if (c.status !== "PENDIENTE" || c.saldo <= 0) continue;
+    const d = daysBetween(c.dueDate);
+    if (d < 0) {
+      items.push({
+        id: `pago-${c.id}`,
+        tipo: "pago",
+        titulo: "Cuota vencida",
+        detalle: `${c.concept} · saldo ${money(c.saldo)} · venció hace ${Math.abs(d)} día(s)`,
+        fecha: c.dueDate,
+        prioridad: "alta",
+      });
+    } else if (d <= 7) {
+      items.push({
+        id: `pago-${c.id}`,
+        tipo: "pago",
+        titulo: "Cuota por vencer",
+        detalle: `${c.concept} · ${money(c.saldo)} · vence en ${d} día(s)`,
+        fecha: c.dueDate,
+        prioridad: d <= 3 ? "alta" : "media",
+      });
+    }
+  }
+
+  for (const it of checklist.items) {
+    if (it.delivered) continue;
+    items.push({
+      id: `doc-${it.requirementId}`,
+      tipo: "documento",
+      titulo: "Documento pendiente",
+      detalle: it.name + (it.notes ? ` · ${it.notes}` : ""),
+      fecha: null,
+      prioridad: "media",
+    });
+  }
+
+  // Orden: prioridad (alta→baja), luego por fecha más próxima.
+  const rank = { alta: 0, media: 1, baja: 2 } as const;
+  items.sort((a, b) => {
+    if (rank[a.prioridad] !== rank[b.prioridad])
+      return rank[a.prioridad] - rank[b.prioridad];
+    return (a.fecha?.getTime() ?? Infinity) - (b.fecha?.getTime() ?? Infinity);
+  });
+
+  return {
+    items,
+    total: items.length,
+    altas: items.filter((i) => i.prioridad === "alta").length,
+  };
+}
+
 // El alumno cambia su contraseña (verifica la actual).
 export async function changePassword(
   userId: string,

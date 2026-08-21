@@ -7,6 +7,7 @@ import {
   changePassword,
   getCuotasForUser,
   getDocumentosForUser,
+  getNotificacionesForUser,
 } from "./portal.service.js";
 
 export const portalRouter = Router();
@@ -34,6 +35,14 @@ portalRouter.get(
   "/documentos",
   asyncHandler(async (req: Request, res: Response) => {
     res.json(await getDocumentosForUser(req.user!.id));
+  })
+);
+
+// Notificaciones del alumno (cuotas y documentos pendientes).
+portalRouter.get(
+  "/notificaciones",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await getNotificacionesForUser(req.user!.id));
   })
 );
 
