@@ -13,6 +13,19 @@ export function requireAdmin(req: Request, _res: Response, next: NextFunction) {
   next();
 }
 
+// Exige rol ADMIN o DOCENTE (para ingresar calificaciones).
+export function requireAdminOrDocente(
+  req: Request,
+  _res: Response,
+  next: NextFunction
+) {
+  if (!req.user) throw unauthorized();
+  if (req.user.role !== "ADMIN" && req.user.role !== "DOCENTE") {
+    throw forbidden("Se requiere rol de administrador o docente");
+  }
+  next();
+}
+
 // Exige permiso sobre una seccion. EDITOR implica tambien lectura.
 // El ADMIN siempre tiene acceso total.
 export function requireSection(

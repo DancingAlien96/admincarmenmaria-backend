@@ -62,8 +62,39 @@ model User {
   createdActas       Acta[]                @relation("ActaCreatedBy")
   docStatusUpdates   StudentDocStatus[]    @relation("DocStatusUpdatedBy")
   createdEbooks      Ebook[]               @relation("EbookCreatedBy")
+  createdGrades      Grade[]               @relation("GradeCreatedBy")
 
   @@index([email])
+}
+
+// Categoría de una calificación dentro de una fase (libro de calificaciones).
+enum GradeCategory {
+  TAREA
+  PRIMER_PARCIAL
+  SEGUNDO_PARCIAL
+  EXAMEN_FINAL
+  RECUPERACION
+}
+
+// Calificación de un estudiante en una fase (I, II, III). Cada fila es una
+// tarea, parcial, examen final o recuperación.
+model Grade {
+  id          String        @id @default(cuid())
+  studentId   String
+  fase        Int // 1, 2, 3
+  category    GradeCategory
+  name        String
+  score       Decimal       @db.Decimal(6, 2)
+  maxScore    Decimal       @default(100) @db.Decimal(6, 2)
+  date        DateTime?
+  createdById String?
+  createdAt   DateTime      @default(now())
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("GradeCreatedBy", fields: [createdById], references: [id])
+
+  @@index([studentId])
+  @@index([studentId, fase])
 }
 
 // Biblioteca digital (E-Books): material de apoyo descargable para los alumnos.
@@ -160,6 +191,7 @@ model Student {
   whatsappMessages WhatsappMessage[]
   portalUser    User?                  @relation("StudentPortalUser")
   docStatuses   StudentDocStatus[]
+  grades        Grade[]
 
   @@index([dpi])
   @@index([status])

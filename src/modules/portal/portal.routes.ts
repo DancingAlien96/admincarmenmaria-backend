@@ -8,6 +8,7 @@ import {
   getCuotasForUser,
   getDocumentosForUser,
   getNotificacionesForUser,
+  getFasesForUser,
 } from "./portal.service.js";
 
 export const portalRouter = Router();
@@ -43,6 +44,14 @@ portalRouter.get(
   "/notificaciones",
   asyncHandler(async (req: Request, res: Response) => {
     res.json(await getNotificacionesForUser(req.user!.id));
+  })
+);
+
+// Fases y calificaciones del alumno.
+portalRouter.get(
+  "/fases",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await getFasesForUser(req.user!.id));
   })
 );
 

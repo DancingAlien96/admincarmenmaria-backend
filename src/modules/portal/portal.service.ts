@@ -4,6 +4,7 @@ import { normalizeName } from "../../lib/normalize.js";
 import { hashPassword, verifyPassword } from "../../lib/auth.js";
 import { studentAccount } from "../charges/charges.service.js";
 import { getStudentChecklist } from "../doc-checklist/doc-checklist.service.js";
+import { getStudentFases } from "../grades/grades.service.js";
 
 // Resuelve el studentId de la cuenta (valida rol ESTUDIANTE).
 async function requireStudentId(userId: string) {
@@ -58,6 +59,12 @@ export async function getCuotasForUser(userId: string) {
 export async function getDocumentosForUser(userId: string) {
   const studentId = await requireStudentId(userId);
   return getStudentChecklist(studentId);
+}
+
+// Fases y calificaciones del alumno logueado (portal · Fases).
+export async function getFasesForUser(userId: string) {
+  const studentId = await requireStudentId(userId);
+  return getStudentFases(studentId);
 }
 
 // Días entre hoy y una fecha (solo fecha, sin hora).
