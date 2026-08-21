@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { env } from "./config/env.js";
+import { isMailConfigured } from "./lib/mailer.js";
 import { UPLOAD_ROOT, ensureUploadDir } from "./lib/storage.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
 import { uploadsRouter } from "./modules/uploads/uploads.routes.js";
@@ -60,7 +61,11 @@ export function createApp() {
   );
 
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", service: "carmenmaria-backend" });
+    res.json({
+      status: "ok",
+      service: "carmenmaria-backend",
+      mailConfigured: isMailConfigured(),
+    });
   });
 
   // Rutas de la API

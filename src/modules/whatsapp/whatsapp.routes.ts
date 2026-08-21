@@ -9,6 +9,7 @@ import {
   updateConfigController,
   sendController,
   bulkController,
+  testEmailController,
 } from "./whatsapp.controller.js";
 
 // Rutas del panel (requieren sesion + seccion REMINDERS)
@@ -22,6 +23,7 @@ whatsappRouter.get("/config", canRead, asyncHandler(getConfigController));
 whatsappRouter.put("/config", canEdit, asyncHandler(updateConfigController));
 whatsappRouter.post("/send", canEdit, asyncHandler(sendController));
 whatsappRouter.post("/bulk", canEdit, asyncHandler(bulkController));
+whatsappRouter.post("/test-email", canEdit, asyncHandler(testEmailController));
 
 // Webhook publico (sin auth de sesion; se valida por firma HMAC)
 export const whatsappWebhookRouter = Router();

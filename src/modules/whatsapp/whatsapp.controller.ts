@@ -2,6 +2,30 @@ import type { Request, Response } from "express";
 import * as service from "./whatsapp.service.js";
 import { verifyWebhookSignature } from "../../lib/ycloud.js";
 import { badRequest } from "../../lib/http-error.js";
+import { isMailConfigured, sendMail } from "../../lib/mailer.js";
+
+// Envia un correo de prueba para verificar la configuracion SMTP.
+export async function testEmailController(req: Request, res: Response) {
+  const to = String(req.body?.to ?? "").trim();
+  if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    throw badRequest("Escribe un correo válido para la prueba");
+  }
+  if (!isMailConfigured()) {
+    throw badRequest(
+      "El correo (SMTP) aún no está configurado en el servidor."
+    );
+  }
+  await sendMail({
+    to,
+    subject: "Correo de prueba · Campus Carmen María",
+    text: "Este es un correo de prueba. Si lo recibiste, el envío de correos del sistema funciona correctamente.",
+    html: `<div style="font-family:Arial,sans-serif;padding:16px;color:#111827;">
+      <p>Este es un <strong>correo de prueba</strong> del sistema de la Escuela de Enfermería Carmen María.</p>
+      <p>Si lo recibiste, el envío de correos funciona correctamente. ✅</p>
+    </div>`,
+  });
+  res.json({ sent: true, to });
+}
 
 // --- Webhook entrante de YCloud (publico, sin auth de sesion) ---
 // Valida la firma HMAC usando el raw body.
