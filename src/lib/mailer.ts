@@ -39,7 +39,11 @@ export async function sendMail(input: SendMailInput) {
       "El correo no esta configurado. Define SMTP_HOST, SMTP_USER y SMTP_PASS."
     );
   }
-  const from = env.SMTP_FROM ?? env.SMTP_USER!;
+  // Remitente con nombre visible (si SMTP_FROM ya trae "Nombre <correo>", se usa tal cual).
+  const rawFrom = env.SMTP_FROM || env.SMTP_USER!;
+  const from = rawFrom.includes("<")
+    ? rawFrom
+    : `"Escuela de Enfermería Carmen María" <${rawFrom}>`;
   const transport = getTransport();
   const info = await transport.sendMail({
     from,

@@ -32,6 +32,22 @@ jobs:
             echo "→ Trayendo últimos cambios de main..."
             git fetch --prune origin
             git reset --hard origin/main
+            echo "→ Configurando SMTP desde GitHub Secrets (si existen)..."
+            upsert_env() {
+              key="$1"; val="$2"
+              [ -z "$val" ] && return 0
+              esc=$(printf '%s' "$val" | sed -e 's/[|&\\]/\\&/g')
+              if grep -q "^${key}=" .env; then
+                sed -i "s|^${key}=.*|${key}=${esc}|" .env
+              else
+                printf '%s=%s\n' "$key" "$val" >> .env
+              fi
+            }
+            upsert_env SMTP_HOST "${{ secrets.SMTP_HOST }}"
+            upsert_env SMTP_PORT "${{ secrets.SMTP_PORT }}"
+            upsert_env SMTP_USER "${{ secrets.SMTP_USER }}"
+            upsert_env SMTP_PASS "${{ secrets.SMTP_PASS }}"
+            upsert_env SMTP_FROM "${{ secrets.SMTP_FROM }}"
             echo "→ Construyendo imagen Docker..."
             docker compose -f docker-compose.prod.yml build
             echo "→ Levantando servicios (mysql + backend)..."
