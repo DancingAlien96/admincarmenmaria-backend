@@ -241,6 +241,10 @@ export async function approvePayment(id: string, userId?: string) {
     include,
   });
   if (payment.chargeId) await recomputeChargeStatus(payment.chargeId);
+  // Confirmación de pago al alumno (correo), sin bloquear.
+  void import("../../lib/email-notify.js")
+    .then((m) => m.sendPaymentReceiptEmail(updated.id))
+    .catch((e) => console.error("[email boleta aprobada]", (e as Error).message));
   return serialize(updated);
 }
 
