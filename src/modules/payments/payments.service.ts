@@ -165,6 +165,10 @@ export async function createManualPayment(
     void import("../whatsapp/notifications.service.js")
       .then((m) => m.notifyPaymentReceived(payment.id))
       .catch((e) => console.error("[notify pago]", (e as Error).message));
+    // Y por correo (confirmación de pago).
+    void import("../../lib/email-notify.js")
+      .then((m) => m.sendPaymentReceiptEmail(payment.id))
+      .catch((e) => console.error("[email pago]", (e as Error).message));
   }
 
   return serialize(payment);

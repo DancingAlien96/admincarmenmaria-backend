@@ -116,6 +116,51 @@ function welcomeHtml(name: string, username: string, password: string, loginUrl:
   </div>`;
 }
 
+// Correo con la plantilla de marca (encabezado con logo + contenido). Nunca
+// lanza: si el correo no está configurado o falla, solo lo registra.
+export async function sendBrandedMail(input: {
+  to: string;
+  subject: string;
+  heading: string;
+  bodyHtml: string;
+  text: string;
+}): Promise<{ sent: boolean }> {
+  if (!isMailConfigured()) return { sent: false };
+  const logo = loadLogo();
+  const logoImg = logo
+    ? `<img src="cid:logocarmenmaria" width="56" height="56" alt="Carmen María" style="display:block;margin:0 auto 10px;object-fit:contain;" />`
+    : "";
+  const html = `
+  <div style="background:#f3f4f6;padding:24px 0;font-family:Arial,Helvetica,sans-serif;">
+    <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb;">
+      <div style="background:${BRAND};padding:22px;text-align:center;">
+        ${logoImg}
+        <div style="color:#ffffff;font-size:16px;font-weight:bold;">${input.heading}</div>
+        <div style="color:#c7d2df;font-size:12px;">Escuela de Enfermería Carmen María</div>
+      </div>
+      <div style="padding:24px 28px;color:#111827;font-size:14px;line-height:1.55;">
+        ${input.bodyHtml}
+      </div>
+      <div style="padding:14px 28px 22px;border-top:1px solid #f3f4f6;color:#9ca3af;font-size:11px;text-align:center;">
+        Escuela Privada de Auxiliares de Enfermería Carmen María
+      </div>
+    </div>
+  </div>`;
+  try {
+    await sendMail({
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+      html,
+      attachments: logo ? [logo] : undefined,
+    });
+    return { sent: true };
+  } catch (err) {
+    console.error("[mailer] no se pudo enviar el correo:", err);
+    return { sent: false };
+  }
+}
+
 // Envia el correo de bienvenida. Nunca lanza: si el correo no está configurado
 // o falla, solo lo registra (la creación de la cuenta no debe romperse).
 export async function sendWelcomeEmail(input: {

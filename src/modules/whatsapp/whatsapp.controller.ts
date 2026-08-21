@@ -3,6 +3,10 @@ import * as service from "./whatsapp.service.js";
 import { verifyWebhookSignature } from "../../lib/ycloud.js";
 import { badRequest } from "../../lib/http-error.js";
 import { isMailConfigured, sendMail } from "../../lib/mailer.js";
+import {
+  sendBulkEmailToStudents,
+  runEmailPaymentReminders,
+} from "../../lib/email-notify.js";
 
 // Envia un correo de prueba para verificar la configuracion SMTP.
 export async function testEmailController(req: Request, res: Response) {
@@ -25,6 +29,29 @@ export async function testEmailController(req: Request, res: Response) {
     </div>`,
   });
   res.json({ sent: true, to });
+}
+
+// Correo masivo a estudiantes (todos o de un año).
+export async function bulkEmailController(req: Request, res: Response) {
+  const subject = String(req.body?.subject ?? "").trim();
+  const message = String(req.body?.message ?? "").trim();
+  const year = req.body?.year ? Number(req.body.year) : undefined;
+  if (subject.length < 2) throw badRequest("Escribe un asunto");
+  if (message.length < 2) throw badRequest("Escribe un mensaje");
+  if (!isMailConfigured()) {
+    throw badRequest("El correo (SMTP) aún no está configurado en el servidor.");
+  }
+  const result = await sendBulkEmailToStudents({ subject, message, year });
+  res.json(result);
+}
+
+// Ejecuta los recordatorios de cuotas por correo (por vencer / mora).
+export async function runEmailRemindersController(_req: Request, res: Response) {
+  if (!isMailConfigured()) {
+    throw badRequest("El correo (SMTP) aún no está configurado en el servidor.");
+  }
+  const result = await runEmailPaymentReminders();
+  res.json(result);
 }
 
 // --- Webhook entrante de YCloud (publico, sin auth de sesion) ---
