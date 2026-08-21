@@ -61,8 +61,30 @@ model User {
   createdGraduates   Graduate[]            @relation("GraduateCreatedBy")
   createdActas       Acta[]                @relation("ActaCreatedBy")
   docStatusUpdates   StudentDocStatus[]    @relation("DocStatusUpdatedBy")
+  createdEbooks      Ebook[]               @relation("EbookCreatedBy")
 
   @@index([email])
+}
+
+// Biblioteca digital (E-Books): material de apoyo descargable para los alumnos.
+model Ebook {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  author      String?
+  category    String?
+  fileUrl     String   @db.Text // PDF/material (en /uploads)
+  fileKey     String?
+  coverUrl    String?  @db.Text // portada opcional
+  coverKey    String?
+  sizeLabel   String? // ej. "14.2 MB"
+  active      Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  createdBy User? @relation("EbookCreatedBy", fields: [createdById], references: [id])
+
+  @@index([active])
 }
 
 model UserPermission {
