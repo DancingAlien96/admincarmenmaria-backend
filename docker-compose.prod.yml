@@ -56,6 +56,9 @@ services:
       YCLOUD_WEBHOOK_SECRET: ${YCLOUD_WEBHOOK_SECRET}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: ${OPENAI_MODEL}
+      TILOPAY_API_KEY: ${TILOPAY_API_KEY}
+      TILOPAY_API_USER: ${TILOPAY_API_USER}
+      TILOPAY_API_PASSWORD: ${TILOPAY_API_PASSWORD}
     # Los archivos subidos persisten en un volumen, fuera del contenedor.
     volumes:
       - uploads_data:/app/uploads
