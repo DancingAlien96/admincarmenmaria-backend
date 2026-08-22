@@ -29,6 +29,7 @@ import { invitesRouter } from "./modules/portal-invites/invites.routes.js";
 import { docChecklistRouter } from "./modules/doc-checklist/doc-checklist.routes.js";
 import { ebooksRouter } from "./modules/ebooks/ebooks.routes.js";
 import { gradesRouter } from "./modules/grades/grades.routes.js";
+import { docenteRouter } from "./modules/docente/docente.routes.js";
 
 export function createApp() {
   const app = express();
@@ -95,6 +96,7 @@ export function createApp() {
   app.use("/api/doc-checklist", docChecklistRouter);
   app.use("/api/ebooks", ebooksRouter);
   app.use("/api/grades", gradesRouter);
+  app.use("/api/docente", docenteRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);
