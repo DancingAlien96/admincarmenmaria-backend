@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { env } from "./config/env.js";
 import { isMailConfigured } from "./lib/mailer.js";
+import { isTilopayConfigured } from "./lib/tilopay.js";
 import { UPLOAD_ROOT, ensureUploadDir } from "./lib/storage.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
 import { uploadsRouter } from "./modules/uploads/uploads.routes.js";
@@ -67,6 +68,7 @@ export function createApp() {
       status: "ok",
       service: "carmenmaria-backend",
       mailConfigured: isMailConfigured(),
+      cardEnabled: isTilopayConfigured(),
     });
   });
 
