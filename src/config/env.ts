@@ -38,6 +38,12 @@ const envSchema = z.object({
   // --- IA (OpenAI) para el bot ---
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
+  // --- Pasarela de pago (Tilopay) ---
+  TILOPAY_BASE_URL: z.string().default("https://app.tilopay.com/api/v1/"),
+  TILOPAY_API_KEY: z.string().optional(),
+  TILOPAY_API_USER: z.string().optional(),
+  TILOPAY_API_PASSWORD: z.string().optional(),
+  TILOPAY_CURRENCY: z.string().default("GTQ"),
 });
 
 const parsed = envSchema.safeParse(process.env);

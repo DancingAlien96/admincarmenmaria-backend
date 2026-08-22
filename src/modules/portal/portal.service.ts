@@ -2,9 +2,16 @@ import { prisma } from "../../lib/prisma.js";
 import { notFound, forbidden, badRequest } from "../../lib/http-error.js";
 import { normalizeName } from "../../lib/normalize.js";
 import { hashPassword, verifyPassword } from "../../lib/auth.js";
-import { studentAccount } from "../charges/charges.service.js";
+import { studentAccount, paidByCharge, recomputeChargeStatus } from "../charges/charges.service.js";
 import { getStudentChecklist } from "../doc-checklist/doc-checklist.service.js";
 import { getStudentFases } from "../grades/grades.service.js";
+import { env } from "../../config/env.js";
+import {
+  createCheckout,
+  isTilopayConfigured,
+  isApproved,
+  type ReturnParams,
+} from "../../lib/tilopay.js";
 
 // Resuelve el studentId de la cuenta (valida rol ESTUDIANTE).
 async function requireStudentId(userId: string) {
@@ -61,6 +68,7 @@ export async function getCuotasForUser(userId: string) {
     cuotas,
     summary,
     progress: { pagadas, total: cuotas.length },
+    cardEnabled: isTilopayConfigured(),
   };
 }
 
@@ -103,6 +111,124 @@ export async function submitBoleta(
     },
   });
   return { ok: true };
+}
+
+// El alumno inicia un pago con tarjeta (checkout hospedado de Tilopay).
+// Devuelve la URL a la que se debe redirigir para ingresar la tarjeta.
+export async function startCardPayment(userId: string, chargeId: string) {
+  const studentId = await requireStudentId(userId);
+  if (!isTilopayConfigured()) {
+    throw badRequest("El pago con tarjeta no está disponible por el momento.");
+  }
+  const student = await prisma.student.findUnique({ where: { id: studentId } });
+  const charge = await prisma.charge.findUnique({ where: { id: chargeId } });
+  if (!student || !charge || charge.studentId !== studentId) {
+    throw notFound("Cuota no encontrada");
+  }
+  if (charge.status === "PAGADO") throw badRequest("Esta cuota ya está pagada");
+  if (!student.email) {
+    throw badRequest("Necesitas un correo en tu expediente para pagar con tarjeta.");
+  }
+
+  const paid = (await paidByCharge([chargeId])).get(chargeId) ?? 0;
+  const amount = Math.max(0, Number(charge.amount) - paid);
+  if (amount <= 0) throw badRequest("Esta cuota no tiene saldo pendiente");
+
+  // Limpia intentos de tarjeta anteriores no aprobados (permite reintentar).
+  await prisma.payment.deleteMany({
+    where: { chargeId, status: "EN_REVISION", source: "PORTAL", method: "TARJETA" },
+  });
+
+  const orderNumber = `${chargeId}-${Date.now().toString(36)}`;
+  await prisma.payment.create({
+    data: {
+      studentId,
+      chargeId,
+      concept: charge.concept,
+      amount,
+      method: "TARJETA",
+      source: "PORTAL",
+      status: "EN_REVISION",
+      orderRef: orderNumber,
+      payerEmail: student.email,
+      payerName: student.fullName,
+    },
+  });
+
+  const [firstName, ...rest] = student.fullName.trim().split(/\s+/);
+  const url = await createCheckout({
+    amount,
+    orderNumber,
+    redirect: `${env.FRONTEND_URL}/portal/pagos/retorno`,
+    firstName: firstName ?? "Estudiante",
+    lastName: rest.join(" ") || "-",
+    email: student.email,
+    phone: student.phonePrimary ?? undefined,
+    address: student.address ?? undefined,
+    city: student.municipality ?? undefined,
+    state: student.department ?? undefined,
+    country: "GT",
+  });
+  return { url };
+}
+
+// Confirma el retorno del checkout de Tilopay y marca la cuota si fue aprobado.
+export async function confirmCardPayment(
+  userId: string,
+  params: { order: string; tpt: string; code: string; auth: string; orderHash: string }
+) {
+  const studentId = await requireStudentId(userId);
+
+  // ¿Ya se procesó este pago? (idempotente)
+  const already = await prisma.payment.findFirst({
+    where: { orderRef: params.order, status: "ACTIVO" },
+  });
+  if (already) return { status: "aprobado" as const };
+
+  const pending = await prisma.payment.findFirst({
+    where: { orderRef: params.order, status: "EN_REVISION", method: "TARJETA" },
+  });
+  if (!pending || pending.studentId !== studentId) {
+    return { status: "no_encontrado" as const };
+  }
+
+  const rp: ReturnParams = {
+    order: params.order,
+    tpt: params.tpt,
+    code: params.code,
+    auth: params.auth,
+    orderHash: params.orderHash,
+    amount: Number(pending.amount),
+    email: pending.payerEmail ?? "",
+  };
+
+  if (params.code !== "1") {
+    // Rechazado / cancelado: se elimina el intento.
+    await prisma.payment.delete({ where: { id: pending.id } });
+    return { status: "rechazado" as const };
+  }
+
+  if (isApproved(rp)) {
+    await prisma.payment.update({
+      where: { id: pending.id },
+      data: { status: "ACTIVO", paidAt: new Date() },
+    });
+    if (pending.chargeId) await recomputeChargeStatus(pending.chargeId);
+    void import("../../lib/email-notify.js")
+      .then((m) => m.sendPaymentReceiptEmail(pending.id))
+      .catch((e) => console.error("[email pago tarjeta]", (e as Error).message));
+    return { status: "aprobado" as const };
+  }
+
+  // code=1 pero la firma no verifica: no se marca automáticamente; queda en
+  // revisión con nota para que el personal lo confirme contra Tilopay.
+  await prisma.payment.update({
+    where: { id: pending.id },
+    data: {
+      concept: `${pending.concept} (tarjeta · verificar en Tilopay · auth ${params.auth})`,
+    },
+  });
+  return { status: "revision" as const };
 }
 
 // Checklist de documentación del alumno logueado (portal · Documentación).

@@ -48,6 +48,9 @@ jobs:
             upsert_env SMTP_USER "${{ secrets.SMTP_USER }}"
             upsert_env SMTP_PASS "${{ secrets.SMTP_PASS }}"
             upsert_env SMTP_FROM "${{ secrets.SMTP_FROM }}"
+            upsert_env TILOPAY_API_KEY "${{ secrets.TILOPAY_API_KEY }}"
+            upsert_env TILOPAY_API_USER "${{ secrets.TILOPAY_API_USER }}"
+            upsert_env TILOPAY_API_PASSWORD "${{ secrets.TILOPAY_API_PASSWORD }}"
             echo "→ Construyendo imagen Docker..."
             docker compose -f docker-compose.prod.yml build
             echo "→ Levantando servicios (mysql + backend)..."

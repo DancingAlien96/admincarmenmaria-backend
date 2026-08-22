@@ -10,6 +10,8 @@ import {
   getNotificacionesForUser,
   getFasesForUser,
   submitBoleta,
+  startCardPayment,
+  confirmCardPayment,
 } from "./portal.service.js";
 
 export const portalRouter = Router();
@@ -62,6 +64,31 @@ portalRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     res.json(
       await submitBoleta(req.user!.id, req.params.chargeId, req.body ?? {})
+    );
+  })
+);
+
+// El alumno inicia el pago con tarjeta (devuelve URL del checkout de Tilopay).
+portalRouter.post(
+  "/cuotas/:chargeId/pay-card",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await startCardPayment(req.user!.id, req.params.chargeId));
+  })
+);
+
+// Confirma el retorno del checkout de Tilopay.
+portalRouter.post(
+  "/pagos/confirmar-tarjeta",
+  asyncHandler(async (req: Request, res: Response) => {
+    const b = req.body ?? {};
+    res.json(
+      await confirmCardPayment(req.user!.id, {
+        order: String(b.order ?? ""),
+        tpt: String(b.tpt ?? ""),
+        code: String(b.code ?? ""),
+        auth: String(b.auth ?? ""),
+        orderHash: String(b.orderHash ?? ""),
+      })
     );
   })
 );

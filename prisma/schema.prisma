@@ -364,6 +364,8 @@ model Payment {
   wooOrderId Int?    @unique
   payerName  String?
   payerEmail String?
+  // Referencia de la pasarela (Tilopay): orderNumber que casa el retorno.
+  orderRef   String?
   // Sede a la que corresponde el pago, si WooCommerce la trae en el producto.
   sede       String?
 
@@ -386,6 +388,7 @@ model Payment {
   @@index([status])
   @@index([source])
   @@index([paidAt])
+  @@index([orderRef])
   @@index([chargeId])
 }
 
