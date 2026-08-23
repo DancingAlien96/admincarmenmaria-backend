@@ -30,6 +30,7 @@ import { docChecklistRouter } from "./modules/doc-checklist/doc-checklist.routes
 import { ebooksRouter } from "./modules/ebooks/ebooks.routes.js";
 import { gradesRouter } from "./modules/grades/grades.routes.js";
 import { docenteRouter } from "./modules/docente/docente.routes.js";
+import { faseContentRouter } from "./modules/fase-content/fase-content.routes.js";
 
 export function createApp() {
   const app = express();
@@ -97,6 +98,7 @@ export function createApp() {
   app.use("/api/ebooks", ebooksRouter);
   app.use("/api/grades", gradesRouter);
   app.use("/api/docente", docenteRouter);
+  app.use("/api/fase-content", faseContentRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);

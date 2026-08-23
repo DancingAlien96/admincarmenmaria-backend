@@ -63,8 +63,38 @@ model User {
   docStatusUpdates   StudentDocStatus[]    @relation("DocStatusUpdatedBy")
   createdEbooks      Ebook[]               @relation("EbookCreatedBy")
   createdGrades      Grade[]               @relation("GradeCreatedBy")
+  createdFaseItems   FaseItem[]            @relation("FaseItemCreatedBy")
 
   @@index([email])
+}
+
+// Contenido de clase por fase (tareas, actividades, exámenes, materiales).
+enum FaseItemKind {
+  TAREA
+  ACTIVIDAD
+  EXAMEN
+  MATERIAL
+}
+
+model FaseItem {
+  id          String       @id @default(cuid())
+  fase        Int // 1, 2, 3
+  kind        FaseItemKind
+  title       String
+  description String?      @db.Text
+  date        DateTime? // fecha de entrega / actividad / examen
+  meta        String? // texto libre: tipo de actividad/examen, duración, etc.
+  fileUrl     String?      @db.Text // para MATERIAL (presentaciones/guías)
+  fileKey     String?
+  sizeLabel   String?
+  active      Boolean      @default(true)
+  createdById String?
+  createdAt   DateTime     @default(now())
+
+  createdBy User? @relation("FaseItemCreatedBy", fields: [createdById], references: [id])
+
+  @@index([fase, kind])
+  @@index([active])
 }
 
 // Categoría de una calificación dentro de una fase (libro de calificaciones).
