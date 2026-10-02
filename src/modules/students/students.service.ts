@@ -5,7 +5,12 @@ import { notFound, badRequest, conflict } from "../../lib/http-error.js";
 import { deleteFile } from "../../lib/storage.js";
 import { hashPassword } from "../../lib/auth.js";
 import { assignExpedienteIfMissing } from "../../lib/expediente.js";
-import { sendWelcomeEmail } from "../../lib/mailer.js";
+import { sendBrandedMail, sendWelcomeEmail } from "../../lib/mailer.js";
+import { env } from "../../config/env.js";
+import {
+  createAdmissionCharges,
+  generateCuotaPlan,
+} from "../charges/charges.service.js";
 import { normalizeName } from "../../lib/normalize.js";
 import { apellidoNombre, compareByApellido } from "../../lib/name-order.js";
 import { migrateStudentToGraduate } from "../graduates/graduates.service.js";
@@ -15,6 +20,7 @@ import type {
   ListStudentsQuery,
   ChangeStatusInput,
   AddDocumentInput,
+  AdmissionDecisionInput,
 } from "./students.schemas.js";
 
 // Normaliza emails vacios ("") a null
@@ -33,6 +39,7 @@ export async function listStudents(q: ListStudentsQuery) {
           },
         }
       : {}),
+    ...(q.boletas ? { payments: { some: REVIEWABLE_PAYMENT } } : {}),
     ...(q.search
       ? {
           OR: [
@@ -107,8 +114,10 @@ export async function createStudent(
   input: CreateStudentInput,
   userId?: string
 ) {
-  return prisma.student.create({
+  const status = input.initialStatus ?? "ACTIVO";
+  const student = await prisma.student.create({
     data: {
+      status,
       fullName: input.fullName,
       dpi: clean(input.dpi),
       birthDate: input.birthDate,
@@ -133,14 +142,133 @@ export async function createStudent(
       // Registro inicial de estado
       statusHistory: {
         create: {
-          toStatus: "ACTIVO",
-          reason: "Expediente creado",
+          toStatus: status,
+          reason:
+            status === "ASPIRANTE"
+              ? "Expediente creado como aspirante"
+              : "Expediente creado",
           changedById: userId,
         },
       },
     },
     include: { guardians: true },
   });
+  // El aspirante debe pagar el examen de admisión
+  if (status === "ASPIRANTE") await createAdmissionCharges(student.id, userId);
+  return student;
+}
+
+// --- Admisión ----------------------------------------------------------------
+
+// Registra el resultado del examen de un aspirante. Aprobado -> ACTIVO (y,
+// opcionalmente, se le aplica el plan de cuotas). No aprobado -> NO_ADMITIDO
+// (se anulan sus cobros pendientes).
+export async function decideAdmission(
+  id: string,
+  input: AdmissionDecisionInput,
+  userId?: string
+) {
+  const student = await prisma.student.findUnique({ where: { id } });
+  if (!student) throw notFound("Expediente no encontrado");
+  if (student.status !== "ASPIRANTE") {
+    throw badRequest("Este expediente no está como aspirante");
+  }
+  const approved = input.result === "APROBADO";
+  const toStatus = approved ? "ACTIVO" : "NO_ADMITIDO";
+  const reason =
+    (approved
+      ? "Aprobó el examen de admisión"
+      : "No aprobó el examen de admisión") +
+    (input.note ? ` · ${input.note}` : "");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.studentStatusHistory.create({
+      data: {
+        studentId: id,
+        fromStatus: student.status,
+        toStatus,
+        reason,
+        changedById: userId,
+      },
+    });
+    await tx.student.update({ where: { id }, data: { status: toStatus } });
+    if (!approved) {
+      await tx.charge.updateMany({
+        where: { studentId: id, status: "PENDIENTE" },
+        data: {
+          status: "ANULADO",
+          annulledAt: new Date(),
+          annulledById: userId,
+          annulReason: "No admitido",
+        },
+      });
+    }
+  });
+
+  let planCreated = 0;
+  let planError: string | null = null;
+  if (approved && input.startMonth) {
+    try {
+      planCreated = (
+        await generateCuotaPlan(id, { startMonth: input.startMonth }, userId)
+      ).created;
+    } catch (err) {
+      planError = (err as Error).message;
+    }
+  }
+
+  // Aviso al aspirante (no bloquea si el correo falla o no está configurado)
+  if (student.email) {
+    const name = student.fullName;
+    const loginUrl = `${env.FRONTEND_URL}/login`;
+    void (
+      approved
+        ? sendBrandedMail({
+            to: student.email,
+            subject: "¡Fuiste admitido/a! · Enfermería Carmen María",
+            heading: "¡Felicidades, fuiste admitido/a!",
+            bodyHtml: `<p>Hola <b>${name}</b>,</p><p>Aprobaste el examen de admisión. Ya eres parte de la Escuela de Enfermería Carmen María.</p><p>En el Campus podrás ver tu plan de pagos, tus fases y materiales.</p><p><a href="${loginUrl}">Entrar al Campus</a></p>`,
+            text: `Hola ${name}, aprobaste el examen de admisión. Ya eres parte de la Escuela de Enfermería Carmen María. Entra al Campus: ${loginUrl}`,
+          })
+        : sendBrandedMail({
+            to: student.email,
+            subject:
+              "Resultado del examen de admisión · Enfermería Carmen María",
+            heading: "Resultado del examen de admisión",
+            bodyHtml: `<p>Hola <b>${name}</b>,</p><p>Gracias por participar en el proceso de admisión. En esta ocasión no fue posible tu ingreso.</p><p>Si deseas más información o volver a intentarlo, comunícate con la escuela.</p>`,
+            text: `Hola ${name}, gracias por participar en el proceso de admisión. En esta ocasión no fue posible tu ingreso. Comunícate con la escuela para más información.`,
+          })
+    ).catch(() => undefined);
+  }
+
+  return { status: toStatus, planCreated, planError };
+}
+
+// Un NO_ADMITIDO vuelve a ser aspirante (nuevo intento): se le genera otro
+// cobro del examen.
+export async function reopenAdmission(id: string, userId?: string) {
+  const student = await prisma.student.findUnique({ where: { id } });
+  if (!student) throw notFound("Expediente no encontrado");
+  if (student.status !== "NO_ADMITIDO") {
+    throw badRequest("Solo se puede reabrir un expediente no admitido");
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.studentStatusHistory.create({
+      data: {
+        studentId: id,
+        fromStatus: student.status,
+        toStatus: "ASPIRANTE",
+        reason: "Nuevo intento de admisión",
+        changedById: userId,
+      },
+    });
+    await tx.student.update({
+      where: { id },
+      data: { status: "ASPIRANTE", archived: false },
+    });
+    await createAdmissionCharges(id, userId, tx);
+  });
+  return { status: "ASPIRANTE" as const };
 }
 
 export async function updateStudent(id: string, input: UpdateStudentInput) {

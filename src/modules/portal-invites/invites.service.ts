@@ -6,6 +6,7 @@ import { normalizeName } from "../../lib/normalize.js";
 import { nextExpediente } from "../../lib/expediente.js";
 import { sendWelcomeEmail } from "../../lib/mailer.js";
 import { areInscripcionesOpen } from "../../lib/settings.js";
+import { createAdmissionCharges } from "../charges/charges.service.js";
 
 // El admin genera una invitación. Con studentId = activar acceso de un
 // expediente existente; sin studentId = inscripción nueva.
@@ -203,7 +204,8 @@ export async function registerFromInvite(token: string, data: RegisterInput) {
         email: data.email,
         photoUrl: data.photoUrl || null,
         photoKey: data.photoKey || null,
-        status: "ACTIVO",
+        // Entra como aspirante: debe pagar y aprobar el examen de admisión
+        status: "ASPIRANTE",
         expedienteNumber: expediente,
         guardians: {
           create: (data.guardians ?? []).map((g) => ({
@@ -214,11 +216,12 @@ export async function registerFromInvite(token: string, data: RegisterInput) {
           })),
         },
         statusHistory: {
-          create: { toStatus: "ACTIVO", reason: "Inscripción por link del portal" },
+          create: { toStatus: "ASPIRANTE", reason: "Solicitud de ingreso por link del portal" },
         },
       },
     });
     studentId = created.id;
+    await createAdmissionCharges(studentId, undefined);
   }
 
   const existingUser = await prisma.user.findFirst({ where: { studentId } });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const STATUS = ["ACTIVO", "EGRESADO", "BAJA"] as const;
+const STATUS = ["ASPIRANTE", "NO_ADMITIDO", "ACTIVO", "EGRESADO", "BAJA"] as const;
 const DOC_TYPES = [
   "DPI",
   "PARTIDA_NACIMIENTO",
@@ -42,9 +42,22 @@ export const createStudentSchema = z.object({
   phoneAlt: z.string().trim().optional(),
   email: z.string().email("Correo invalido").trim().optional().or(z.literal("")),
   guardians: z.array(guardianSchema).default([]),
+  // Estado inicial al crear: alumno ya admitido o aspirante (paga el examen)
+  initialStatus: z.enum(["ACTIVO", "ASPIRANTE"]).optional(),
 });
 
 export const updateStudentSchema = createStudentSchema.partial();
+
+// Resultado del examen de admisión de un aspirante
+export const admissionDecisionSchema = z.object({
+  result: z.enum(["APROBADO", "NO_APROBADO"]),
+  note: z.string().trim().max(500).optional(),
+  // Si viene, al admitirlo se le aplica el plan de cuotas desde ese mes
+  startMonth: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "Mes de inicio inválido (AAAA-MM)")
+    .optional(),
+});
 
 export const listStudentsQuery = z.object({
   search: z.string().trim().optional(),
@@ -56,6 +69,11 @@ export const listStudentsQuery = z.object({
     .enum(["true", "false"])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "true")),
+  // Solo estudiantes con comprobantes de pago por revisar
+  boletas: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => v === "true"),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -86,5 +104,6 @@ export const docParams = z.object({
 export type CreateStudentInput = z.infer<typeof createStudentSchema>;
 export type UpdateStudentInput = z.infer<typeof updateStudentSchema>;
 export type ListStudentsQuery = z.infer<typeof listStudentsQuery>;
+export type AdmissionDecisionInput = z.infer<typeof admissionDecisionSchema>;
 export type ChangeStatusInput = z.infer<typeof changeStatusSchema>;
 export type AddDocumentInput = z.infer<typeof addDocumentSchema>;

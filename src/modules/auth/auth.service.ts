@@ -15,9 +15,13 @@ export async function getUserProfile(userId: string) {
       active: true,
       studentId: true,
       permissions: { select: { section: true, level: true } },
+      // Etapa del alumno (el portal se limita mientras es aspirante)
+      student: { select: { status: true } },
     },
   });
-  return user;
+  if (!user) return user;
+  const { student, ...rest } = user;
+  return { ...rest, studentStatus: student?.status ?? null };
 }
 
 export async function login(input: LoginInput) {

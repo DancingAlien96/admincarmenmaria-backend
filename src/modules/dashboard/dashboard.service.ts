@@ -15,7 +15,11 @@ async function getMora(from: Date, to: Date) {
 
   // Mora acumulada: cargos PENDIENTE ya vencidos (hasta hoy)
   const overdueCharges = await prisma.charge.findMany({
-    where: { status: "PENDIENTE", dueDate: { lt: now } },
+    where: {
+      status: "PENDIENTE",
+      dueDate: { lt: now },
+      student: { status: { notIn: ["ASPIRANTE", "NO_ADMITIDO"] } },
+    },
     select: { id: true, amount: true, studentId: true },
   });
   const paid = await paidByCharge(overdueCharges.map((c) => c.id));
@@ -270,7 +274,7 @@ export async function getOverview() {
 
   // Estudiantes por estado -> objeto
   const statusCounts: Record<string, number> = {
-    ACTIVO: 0, EGRESADO: 0, BAJA: 0,
+    ASPIRANTE: 0, NO_ADMITIDO: 0, ACTIVO: 0, EGRESADO: 0, BAJA: 0,
   };
   let studentsTotal = 0;
   for (const r of studentsByStatus) {

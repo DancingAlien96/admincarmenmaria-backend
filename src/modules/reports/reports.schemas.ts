@@ -7,7 +7,7 @@ export const reportQuery = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
   sede: z.string().trim().optional(),
-  status: z.enum(["ACTIVO", "EGRESADO", "BAJA"]).optional(),
+  status: z.enum(["ASPIRANTE", "NO_ADMITIDO", "ACTIVO", "EGRESADO", "BAJA"]).optional(),
   year: z.coerce.number().int().min(2000).max(2100).optional(),
   month: z
     .string()

@@ -165,7 +165,9 @@ model UserPermission {
 // ----------------------------------------------------------------------------
 
 enum StudentStatus {
-  ACTIVO // Cursando (estado inicial al inscribir)
+  ASPIRANTE // Llenó la ficha; pendiente del examen de admisión
+  NO_ADMITIDO // No aprobó el examen de admisión
+  ACTIVO // Cursando (admitido)
   EGRESADO // Curso completado, migrado a banca de diplomas
   BAJA // Abandono o expulsion, expediente archivado
 }
@@ -484,6 +486,9 @@ model CuotaPlanItem {
   monthOffset Int      @default(0)
   order       Int      @default(0)
   active      Boolean  @default(true)
+  // Cobro de la etapa de aspirante (examen de admisión). No forma parte del
+  // plan de cuotas del alumno admitido.
+  admission   Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

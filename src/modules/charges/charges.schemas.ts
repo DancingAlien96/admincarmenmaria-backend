@@ -44,6 +44,7 @@ export const createPlanItemSchema = z.object({
   concept: z.string().min(2, "Concepto requerido").trim(),
   amount: z.coerce.number().positive("El monto debe ser mayor a 0"),
   monthOffset: z.coerce.number().int().min(0).max(120).default(0),
+  admission: z.boolean().optional(),
 });
 
 export const updatePlanItemSchema = z.object({

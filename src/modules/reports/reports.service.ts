@@ -17,7 +17,7 @@ export interface ReportFilters {
   from?: string;
   to?: string;
   sede?: string;
-  status?: "ACTIVO" | "EGRESADO" | "BAJA";
+  status?: "ASPIRANTE" | "NO_ADMITIDO" | "ACTIVO" | "EGRESADO" | "BAJA";
   year?: number;
   month?: string; // "YYYY-MM" para el reporte de mora
 }
@@ -57,7 +57,7 @@ async function buildResumen(f: ReportFilters): Promise<ReportData> {
     prisma.graduate.count(),
     getMoraStudents(),
   ]);
-  const status: Record<string, number> = { ACTIVO: 0, EGRESADO: 0, BAJA: 0 };
+  const status: Record<string, number> = { ASPIRANTE: 0, NO_ADMITIDO: 0, ACTIVO: 0, EGRESADO: 0, BAJA: 0 };
   byStatus.forEach((r) => (status[r.status] = r._count));
   const ingresos = Number(income._sum.amount ?? 0) - Number(income._sum.discount ?? 0);
   const egresos = Number(expense._sum.amount ?? 0);
@@ -81,9 +81,11 @@ async function buildResumen(f: ReportFilters): Promise<ReportData> {
         title: "Estudiantes por estado",
         columns: ["Estado", "Cantidad"],
         rows: [
+          ["Aspirantes", status.ASPIRANTE],
           ["Activos", status.ACTIVO],
           ["Egresados", status.EGRESADO],
           ["De baja", status.BAJA],
+          ["No admitidos", status.NO_ADMITIDO],
         ],
       },
     ],
@@ -196,7 +198,13 @@ async function buildEstudiantes(f: ReportFilters): Promise<ReportData> {
   });
   // Orden alfabético por apellido.
   const rows = raw.sort((a, b) => compareByApellido(a.fullName, b.fullName));
-  const STAT: Record<string, string> = { ACTIVO: "Activo", EGRESADO: "Egresado", BAJA: "Baja" };
+  const STAT: Record<string, string> = {
+    ASPIRANTE: "Aspirante",
+    NO_ADMITIDO: "No admitido",
+    ACTIVO: "Activo",
+    EGRESADO: "Egresado",
+    BAJA: "Baja",
+  };
   const filtros = [
     f.status ? STAT[f.status] : null,
     f.sede || null,

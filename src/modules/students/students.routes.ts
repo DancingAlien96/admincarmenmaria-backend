@@ -8,6 +8,7 @@ import {
   updateStudentSchema,
   listStudentsQuery,
   changeStatusSchema,
+  admissionDecisionSchema,
   addDocumentSchema,
   mergeStudentsSchema,
   studentIdParam,
@@ -19,6 +20,8 @@ import {
   createController,
   updateController,
   changeStatusController,
+  admissionDecisionController,
+  admissionReopenController,
   addDocumentController,
   deleteDocumentController,
   syncController,
@@ -83,6 +86,19 @@ studentsRouter.post(
   canEdit,
   validate({ params: studentIdParam, body: changeStatusSchema }),
   asyncHandler(changeStatusController)
+);
+// Admisión: resultado del examen del aspirante / nuevo intento
+studentsRouter.post(
+  "/:id/admission/decision",
+  canEdit,
+  validate({ params: studentIdParam, body: admissionDecisionSchema }),
+  asyncHandler(admissionDecisionController)
+);
+studentsRouter.post(
+  "/:id/admission/reopen",
+  canEdit,
+  validate({ params: studentIdParam }),
+  asyncHandler(admissionReopenController)
 );
 studentsRouter.post(
   "/:id/documents",

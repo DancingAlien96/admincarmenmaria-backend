@@ -188,6 +188,7 @@ export async function createPlanItem(input: CreatePlanItemInput) {
       concept: input.concept,
       amount: input.amount,
       monthOffset: input.monthOffset,
+      admission: input.admission ?? false,
       order: (last?.order ?? 0) + 1,
     },
   });
@@ -343,6 +344,45 @@ export async function propagatePlanItem(
   return { updated: ids.length, nowPaid: nowPaidIds.length };
 }
 
+// Cuotas que NO son el cobro de admisión (las de la etapa de aspirante no
+// cuentan como "ya tiene plan").
+const NOT_ADMISSION_CHARGE: Prisma.ChargeWhereInput = {
+  NOT: { planItem: { admission: true } },
+};
+
+// Crea el cobro del examen de admisión a un aspirante (items del plan marcados
+// como admisión). Vence en 7 días. No duplica si ya tiene uno pendiente.
+export async function createAdmissionCharges(
+  studentId: string,
+  userId: string | undefined,
+  tx: Prisma.TransactionClient = prisma
+): Promise<number> {
+  const pending = await tx.charge.count({
+    where: { studentId, status: "PENDIENTE", planItem: { admission: true } },
+  });
+  if (pending > 0) return 0;
+  const items = await tx.cuotaPlanItem.findMany({
+    where: { active: true, admission: true },
+    orderBy: { order: "asc" },
+  });
+  if (items.length === 0) return 0;
+  const now = new Date();
+  const due = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 7)
+  );
+  const res = await tx.charge.createMany({
+    data: items.map((it) => ({
+      studentId,
+      planItemId: it.id,
+      concept: it.concept,
+      amount: it.amount,
+      dueDate: due,
+      createdById: userId,
+    })),
+  });
+  return res.count;
+}
+
 // Crea los Charge de un estudiante a partir del plan general. Devuelve
 // "created" (cuántas cuotas se crearon) o "skipped" si ya tenía cuotas.
 async function buildChargesFromPlan(
@@ -352,7 +392,7 @@ async function buildChargesFromPlan(
   tx: Prisma.TransactionClient = prisma
 ): Promise<number> {
   const existing = await tx.charge.count({
-    where: { studentId, status: { not: "ANULADO" } },
+    where: { studentId, status: { not: "ANULADO" }, ...NOT_ADMISSION_CHARGE },
   });
   if (existing > 0) return 0; // ya tiene plan; no se duplica
 
@@ -360,7 +400,7 @@ async function buildChargesFromPlan(
   if (!y || !m) throw badRequest("Mes de inicio inválido (formato AAAA-MM)");
 
   const items = await tx.cuotaPlanItem.findMany({
-    where: { active: true },
+    where: { active: true, admission: false },
     orderBy: [{ order: "asc" }, { monthOffset: "asc" }],
   });
   if (items.length === 0) {
@@ -369,13 +409,16 @@ async function buildChargesFromPlan(
     );
   }
 
+  // La primera cuota del plan vence en el mes de inicio elegido; los meses
+  // de la plantilla se toman relativos a ella.
+  const base = Math.min(...items.map((it) => it.monthOffset));
   const data: Prisma.ChargeCreateManyInput[] = items.map((it) => ({
     studentId,
     planItemId: it.id,
     concept: it.concept,
     amount: it.amount,
     // Vence el día 1 del mes correspondiente (UTC para no correrse por zona).
-    dueDate: new Date(Date.UTC(y, m - 1 + it.monthOffset, 1)),
+    dueDate: new Date(Date.UTC(y, m - 1 + it.monthOffset - base, 1)),
     createdById: userId,
   }));
   const res = await tx.charge.createMany({ data });
@@ -392,7 +435,7 @@ export async function generateCuotaPlan(
   if (!student) throw notFound("Expediente no encontrado");
 
   const existing = await prisma.charge.count({
-    where: { studentId, status: { not: "ANULADO" } },
+    where: { studentId, status: { not: "ANULADO" }, ...NOT_ADMISSION_CHARGE },
   });
   if (existing > 0) {
     throw badRequest(

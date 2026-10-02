@@ -73,3 +73,11 @@ export async function mergeController(req: Request, res: Response) {
   const student = await service.mergeStudents(req.body.keepId, req.body.dupId);
   res.json({ student });
 }
+
+export async function admissionDecisionController(req: Request, res: Response) {
+  res.json(await service.decideAdmission(req.params.id, req.body, req.user?.id));
+}
+
+export async function admissionReopenController(req: Request, res: Response) {
+  res.json(await service.reopenAdmission(req.params.id, req.user?.id));
+}
