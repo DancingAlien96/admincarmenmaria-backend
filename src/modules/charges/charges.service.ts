@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { badRequest, notFound } from "../../lib/http-error.js";
+import { REVIEWABLE_PAYMENT } from "../../lib/payment-review.js";
 import type {
   CreateChargeInput,
   BulkChargeInput,
@@ -447,7 +448,39 @@ export async function studentAccount(studentId: string) {
     orderBy: { dueDate: "desc" },
   });
   const paid = await paidByCharge(rows.map((r) => r.id));
-  const charges = rows.map((r) => decorate(r, paid.get(r.id) ?? 0, now));
+  // Pagos de cada cuota (aprobados y boletas en revisión) para verlos en el
+  // expediente junto a la cuota.
+  const payRows = await prisma.payment.findMany({
+    where: {
+      chargeId: { in: rows.map((r) => r.id) },
+      OR: [{ status: "ACTIVO" }, REVIEWABLE_PAYMENT],
+    },
+    orderBy: { paidAt: "asc" },
+    select: {
+      id: true,
+      chargeId: true,
+      amount: true,
+      discount: true,
+      method: true,
+      source: true,
+      status: true,
+      paidAt: true,
+      receiptUrl: true,
+    },
+  });
+  const paysByCharge = new Map<string, typeof payRows>();
+  for (const p of payRows) {
+    if (!p.chargeId) continue;
+    paysByCharge.set(p.chargeId, [...(paysByCharge.get(p.chargeId) ?? []), p]);
+  }
+  const charges = rows.map((r) => ({
+    ...decorate(r, paid.get(r.id) ?? 0, now),
+    payments: (paysByCharge.get(r.id) ?? []).map((p) => ({
+      ...p,
+      amount: Number(p.amount),
+      discount: Number(p.discount),
+    })),
+  }));
 
   const totalCharged = charges.reduce((s, c) => s + c.amount, 0);
   const totalPaid = charges.reduce((s, c) => s + c.paid, 0);

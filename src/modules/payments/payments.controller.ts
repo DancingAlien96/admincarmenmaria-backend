@@ -33,8 +33,10 @@ export async function annulController(req: Request, res: Response) {
   res.json({ payment });
 }
 
-export async function pendingController(_req: Request, res: Response) {
-  res.json({ payments: await service.listPendingPayments() });
+export async function pendingController(req: Request, res: Response) {
+  const studentId =
+    typeof req.query.studentId === "string" ? req.query.studentId : undefined;
+  res.json({ payments: await service.listPendingPayments(studentId) });
 }
 
 export async function approveController(req: Request, res: Response) {

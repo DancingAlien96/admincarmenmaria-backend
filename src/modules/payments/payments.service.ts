@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { badRequest, notFound } from "../../lib/http-error.js";
+import { REVIEWABLE_PAYMENT } from "../../lib/payment-review.js";
 import {
   fetchOrders,
   extractSede,
@@ -67,7 +68,11 @@ const include = {
 export async function listPayments(q: ListPaymentsQuery) {
   const where: Prisma.PaymentWhereInput = {
     ...(q.studentId ? { studentId: q.studentId } : {}),
-    ...(q.status ? { status: q.status } : {}),
+    // Las boletas en revisión o rechazadas se gestionan en el expediente;
+    // Control de Pagos solo lista pagos reales salvo que se filtre a propósito.
+    ...(q.status
+      ? { status: q.status }
+      : { status: { notIn: ["EN_REVISION", "RECHAZADO"] } }),
     ...(q.source ? { source: q.source } : {}),
     ...(q.method ? { method: q.method } : {}),
     ...(q.unlinked === true ? { studentId: null } : {}),
@@ -207,9 +212,9 @@ export async function annulPayment(
 // --- Boletas subidas por el alumno (revisión del personal) ------------------
 
 // Pagos en revisión (boletas subidas por estudiantes), con datos del alumno.
-export async function listPendingPayments() {
+export async function listPendingPayments(studentId?: string) {
   const rows = await prisma.payment.findMany({
-    where: { status: "EN_REVISION" },
+    where: { ...REVIEWABLE_PAYMENT, ...(studentId ? { studentId } : {}) },
     orderBy: { createdAt: "asc" },
     include: {
       student: {
@@ -224,6 +229,7 @@ export async function listPendingPayments() {
     method: p.method,
     paidAt: p.paidAt,
     receiptUrl: p.receiptUrl,
+    chargeId: p.chargeId,
     student: p.student,
   }));
 }

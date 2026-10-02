@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
+import { REVIEWABLE_PAYMENT } from "../../lib/payment-review.js";
 import { notFound, badRequest, conflict } from "../../lib/http-error.js";
 import { deleteFile } from "../../lib/storage.js";
 import { hashPassword } from "../../lib/auth.js";
@@ -54,7 +55,13 @@ export async function listStudents(q: ListStudentsQuery) {
       sede: true,
       phonePrimary: true,
       enrollmentDate: true,
-      _count: { select: { documents: true } },
+      _count: {
+        select: {
+          documents: true,
+          // Boletas subidas por el alumno pendientes de revisión
+          payments: { where: REVIEWABLE_PAYMENT },
+        },
+      },
     },
   });
   all.sort((a, b) => compareByApellido(a.fullName, b.fullName));

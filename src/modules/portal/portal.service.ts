@@ -6,6 +6,7 @@ import { studentAccount, paidByCharge, recomputeChargeStatus } from "../charges/
 import { getStudentChecklist } from "../doc-checklist/doc-checklist.service.js";
 import { getStudentFases } from "../grades/grades.service.js";
 import { env } from "../../config/env.js";
+import { REVIEWABLE_PAYMENT, TILOPAY_VERIFY_NOTE } from "../../lib/payment-review.js";
 import {
   createCheckout,
   isTilopayConfigured,
@@ -32,7 +33,7 @@ export async function getCuotasForUser(userId: string) {
 
   // Cuotas con una boleta en revisión (subida por el alumno).
   const pendientes = await prisma.payment.findMany({
-    where: { studentId, status: "EN_REVISION", chargeId: { not: null } },
+    where: { ...REVIEWABLE_PAYMENT, studentId, chargeId: { not: null } },
     select: { chargeId: true },
   });
   const enRevision = new Set(pendientes.map((p) => p.chargeId));
@@ -87,7 +88,7 @@ export async function submitBoleta(
   if (charge.status === "PAGADO") throw badRequest("Esta cuota ya está pagada");
   if (!input.receiptUrl) throw badRequest("Adjunta la imagen o PDF de tu boleta");
   const existing = await prisma.payment.findFirst({
-    where: { chargeId, status: "EN_REVISION" },
+    where: { ...REVIEWABLE_PAYMENT, chargeId },
   });
   if (existing) {
     throw badRequest("Ya tienes una boleta en revisión para esta cuota");
@@ -225,7 +226,7 @@ export async function confirmCardPayment(
   await prisma.payment.update({
     where: { id: pending.id },
     data: {
-      concept: `${pending.concept} (tarjeta · verificar en Tilopay · auth ${params.auth})`,
+      concept: `${pending.concept} (tarjeta · ${TILOPAY_VERIFY_NOTE} · auth ${params.auth})`,
     },
   });
   return { status: "revision" as const };
