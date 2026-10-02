@@ -47,23 +47,23 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  student          Student?               @relation("StudentPortalUser", fields: [studentId], references: [id])
-  permissions      UserPermission[]
+  student            Student?               @relation("StudentPortalUser", fields: [studentId], references: [id])
+  permissions        UserPermission[]
   // Auditoria
-  createdStudents  Student[]               @relation("StudentCreatedBy")
-  statusChanges    StudentStatusHistory[]  @relation("StatusChangedBy")
-  uploadedDocs     StudentDocument[]       @relation("DocUploadedBy")
-  registeredPayments Payment[]             @relation("PaymentRegisteredBy")
-  annulledPayments   Payment[]             @relation("PaymentAnnulledBy")
-  registeredExpenses Expense[]             @relation("ExpenseRegisteredBy")
-  createdCharges     Charge[]              @relation("ChargeCreatedBy")
-  annulledCharges    Charge[]              @relation("ChargeAnnulledBy")
-  createdGraduates   Graduate[]            @relation("GraduateCreatedBy")
-  createdActas       Acta[]                @relation("ActaCreatedBy")
-  docStatusUpdates   StudentDocStatus[]    @relation("DocStatusUpdatedBy")
-  createdEbooks      Ebook[]               @relation("EbookCreatedBy")
-  createdGrades      Grade[]               @relation("GradeCreatedBy")
-  createdFaseItems   FaseItem[]            @relation("FaseItemCreatedBy")
+  createdStudents    Student[]              @relation("StudentCreatedBy")
+  statusChanges      StudentStatusHistory[] @relation("StatusChangedBy")
+  uploadedDocs       StudentDocument[]      @relation("DocUploadedBy")
+  registeredPayments Payment[]              @relation("PaymentRegisteredBy")
+  annulledPayments   Payment[]              @relation("PaymentAnnulledBy")
+  registeredExpenses Expense[]              @relation("ExpenseRegisteredBy")
+  createdCharges     Charge[]               @relation("ChargeCreatedBy")
+  annulledCharges    Charge[]               @relation("ChargeAnnulledBy")
+  createdGraduates   Graduate[]             @relation("GraduateCreatedBy")
+  createdActas       Acta[]                 @relation("ActaCreatedBy")
+  docStatusUpdates   StudentDocStatus[]     @relation("DocStatusUpdatedBy")
+  createdEbooks      Ebook[]                @relation("EbookCreatedBy")
+  createdGrades      Grade[]                @relation("GradeCreatedBy")
+  createdFaseItems   FaseItem[]             @relation("FaseItemCreatedBy")
 
   @@index([email])
 }
@@ -171,57 +171,57 @@ enum StudentStatus {
 }
 
 model Student {
-  id             String        @id @default(cuid())
+  id               String        @id @default(cuid())
   // Correlativo visible del expediente (ej. AE-2025-0147)
-  expedienteNumber String?     @unique
+  expedienteNumber String?       @unique
   // Nombre completo (compuesto de las partes; sigue siendo la fuente para
   // mostrar, buscar y cruzar con actas).
-  fullName       String
+  fullName         String
   // Nombre desglosado (capturado en la inscripcion). El tercer apellido es
   // opcional. Pueden faltar en expedientes antiguos.
-  primerNombre    String?
-  segundoNombre   String?
-  tercerNombre    String?
-  primerApellido  String?
-  segundoApellido String?
-  tercerApellido  String?
+  primerNombre     String?
+  segundoNombre    String?
+  tercerNombre     String?
+  primerApellido   String?
+  segundoApellido  String?
+  tercerApellido   String?
   // Opcional: los estudiantes creados desde un pago aun no tienen DPI.
   // Sigue siendo unico cuando esta presente (MySQL permite varios NULL).
-  dpi            String?       @unique // Identificacion oficial, no repetible
-  birthDate      DateTime?
+  dpi              String?       @unique // Identificacion oficial, no repetible
+  birthDate        DateTime?
   // Direccion
-  department     String?
-  municipality   String?
-  address        String?
+  department       String?
+  municipality     String?
+  address          String?
   // Contacto
-  phonePrimary   String?
-  phoneAlt       String?
-  email          String?
+  phonePrimary     String?
+  phoneAlt         String?
+  email            String?
   // Foto del estudiante (subida en la inscripcion). Archivo propio en /uploads.
-  photoUrl       String?  @db.Text
-  photoKey       String?
+  photoUrl         String?       @db.Text
+  photoKey         String?
   // Sede en la que se inscribio (Chiquimula / Morales Izabal). Derivada del
   // pago de admision de WooCommerce; editable a mano.
-  sede           String?
+  sede             String?
   // Estado y trazabilidad
-  status         StudentStatus @default(ACTIVO)
-  enrollmentDate DateTime      @default(now())
-  archived       Boolean       @default(false) // Nunca se elimina, solo se archiva
-  createdById    String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  status           StudentStatus @default(ACTIVO)
+  enrollmentDate   DateTime      @default(now())
+  archived         Boolean       @default(false) // Nunca se elimina, solo se archiva
+  createdById      String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  createdBy     User?                  @relation("StudentCreatedBy", fields: [createdById], references: [id])
-  guardians     Guardian[]
-  documents     StudentDocument[]
-  statusHistory StudentStatusHistory[]
-  payments      Payment[]
-  charges       Charge[]
-  graduate      Graduate?
+  createdBy        User?                  @relation("StudentCreatedBy", fields: [createdById], references: [id])
+  guardians        Guardian[]
+  documents        StudentDocument[]
+  statusHistory    StudentStatusHistory[]
+  payments         Payment[]
+  charges          Charge[]
+  graduate         Graduate?
   whatsappMessages WhatsappMessage[]
-  portalUser    User?                  @relation("StudentPortalUser")
-  docStatuses   StudentDocStatus[]
-  grades        Grade[]
+  portalUser       User?                  @relation("StudentPortalUser")
+  docStatuses      StudentDocStatus[]
+  grades           Grade[]
 
   @@index([dpi])
   @@index([status])
@@ -309,13 +309,13 @@ model StudentDocStatus {
 
 // Historial de cambios de estado (cada cambio registra fecha y motivo)
 model StudentStatusHistory {
-  id           String        @id @default(cuid())
-  studentId    String
-  fromStatus   StudentStatus?
-  toStatus     StudentStatus
-  reason       String?       @db.Text
-  changedById  String?
-  createdAt    DateTime      @default(now())
+  id          String         @id @default(cuid())
+  studentId   String
+  fromStatus  StudentStatus?
+  toStatus    StudentStatus
+  reason      String?        @db.Text
+  changedById String?
+  createdAt   DateTime       @default(now())
 
   student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   changedBy User?   @relation("StatusChangedBy", fields: [changedById], references: [id])
@@ -434,13 +434,15 @@ enum ChargeStatus {
 }
 
 model Charge {
-  id        String       @id @default(cuid())
-  studentId String
-  feeTypeId String?
-  concept   String
-  amount    Decimal      @db.Decimal(10, 2)
-  dueDate   DateTime // fecha de vencimiento
-  status    ChargeStatus @default(PENDIENTE)
+  id         String       @id @default(cuid())
+  studentId  String
+  feeTypeId  String?
+  // Item del plan general del que salió esta cuota (para propagar cambios de precio)
+  planItemId String?
+  concept    String
+  amount     Decimal      @db.Decimal(10, 2)
+  dueDate    DateTime // fecha de vencimiento
+  status     ChargeStatus @default(PENDIENTE)
 
   // Trazabilidad
   createdById  String?
@@ -451,14 +453,16 @@ model Charge {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  feeType   FeeType?  @relation(fields: [feeTypeId], references: [id])
-  createdBy User?     @relation("ChargeCreatedBy", fields: [createdById], references: [id])
-  annulledBy User?    @relation("ChargeAnnulledBy", fields: [annulledById], references: [id])
-  payments  Payment[]
+  student    Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  feeType    FeeType?       @relation(fields: [feeTypeId], references: [id])
+  planItem   CuotaPlanItem? @relation(fields: [planItemId], references: [id], onDelete: SetNull)
+  createdBy  User?          @relation("ChargeCreatedBy", fields: [createdById], references: [id])
+  annulledBy User?          @relation("ChargeAnnulledBy", fields: [annulledById], references: [id])
+  payments   Payment[]
 
   @@index([studentId])
   @@index([status])
+  @@index([planItemId])
   @@index([dueDate])
 }
 
@@ -483,6 +487,8 @@ model CuotaPlanItem {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  charges Charge[]
+
   @@index([active])
 }
 
@@ -492,27 +498,27 @@ model CuotaPlanItem {
 // ----------------------------------------------------------------------------
 
 model Graduate {
-  id            String   @id @default(cuid())
+  id             String   @id @default(cuid())
   // Vinculo opcional al expediente de origen (1 a 1). Puede ser null si se
   // registra un egresado historico sin expediente en el sistema.
-  studentId     String?  @unique
-  fullName      String
-  dpi           String?  @unique // Identificacion oficial (opcional)
-  email         String?
-  phone         String?
-  mspasCode     String? // Codigo de MSPAS del egresado
-  diplomaNumber String   @unique // Correlativo unico e irrepetible
+  studentId      String?  @unique
+  fullName       String
+  dpi            String?  @unique // Identificacion oficial (opcional)
+  email          String?
+  phone          String?
+  mspasCode      String? // Codigo de MSPAS del egresado
+  diplomaNumber  String   @unique // Correlativo unico e irrepetible
   graduationDate DateTime
   // Archivo del diploma escaneado (UploadThing): solo guardamos la referencia
-  diplomaUrl    String?  @db.Text
-  diplomaKey    String?
+  diplomaUrl     String?  @db.Text
+  diplomaKey     String?
 
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  student   Student? @relation(fields: [studentId], references: [id])
-  createdBy User?    @relation("GraduateCreatedBy", fields: [createdById], references: [id])
+  student   Student?               @relation(fields: [studentId], references: [id])
+  createdBy User?                  @relation("GraduateCreatedBy", fields: [createdById], references: [id])
   letters   RecommendationLetter[]
 
   @@index([fullName])
@@ -544,17 +550,17 @@ model RecommendationLetter {
 // Plantilla reutilizable de acta: cuerpo con marcadores ({{...}}, {{tabla}},
 // {{lista}}) que el admin gestiona y reutiliza al crear actas.
 model ActaTemplate {
-  id        String   @id @default(cuid())
-  name      String   // ej. "Calificaciones", "Inauguracion"
-  title     String?  // titulo por defecto del acta
-  body      String   @db.Text // cuerpo con marcadores
-  columns   Json?    // encabezados de tabla por defecto (string[])
-  signers   Json?    // firmantes por defecto [{name, role}]
-  vars      Json?    // variables por defecto {clave: valor}
-  block     String?  // "tabla" | "lista" | null (que bloque usa)
+  id          String   @id @default(cuid())
+  name        String // ej. "Calificaciones", "Inauguracion"
+  title       String? // titulo por defecto del acta
+  body        String   @db.Text // cuerpo con marcadores
+  columns     Json? // encabezados de tabla por defecto (string[])
+  signers     Json? // firmantes por defecto [{name, role}]
+  vars        Json? // variables por defecto {clave: valor}
+  block       String? // "tabla" | "lista" | null (que bloque usa)
   createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([name])
 }
@@ -563,20 +569,20 @@ model ActaTemplate {
 // el sistema solo garantiza el formato oficial (membrete, firma, sello).
 model Acta {
   id         String    @id @default(cuid())
-  actaNumber String    // No. de acta (lo define el admin)
-  folios     String?   // No. de folios correspondiente
-  title      String?   // titulo / tipo de acta
-  actaDate   DateTime  // Fecha del acto/evaluacion
+  actaNumber String // No. de acta (lo define el admin)
+  folios     String? // No. de folios correspondiente
+  title      String? // titulo / tipo de acta
+  actaDate   DateTime // Fecha del acto/evaluacion
   closeDate  DateTime? // Fecha en que se extiende/remite el acta
   city       String    @default("Chiquimula")
   department String    @default("Chiquimula")
   body       String    @db.Text // snapshot del cuerpo final con marcadores
-  vars       Json?     // variables {clave: valor}
-  columns    Json?     // encabezados de tabla (string[])
-  rows       Json?     // filas [{name, value}] para {{tabla}}/{{lista}}
-  signers    Json?     // firmantes [{name, role}]
+  vars       Json? // variables {clave: valor}
+  columns    Json? // encabezados de tabla (string[])
+  rows       Json? // filas [{name, value}] para {{tabla}}/{{lista}}
+  signers    Json? // firmantes [{name, role}]
   notes      String?   @db.Text
-  templateId String?   // plantilla de origen (informativo)
+  templateId String? // plantilla de origen (informativo)
 
   // Trazabilidad del envio a la supervisora
   sentAt DateTime?
@@ -609,15 +615,15 @@ enum ExpenseCategory {
 }
 
 model Expense {
-  id          String          @id @default(cuid())
-  category    ExpenseCategory
-  concept     String
-  amount      Decimal         @db.Decimal(10, 2)
-  spentAt     DateTime        @default(now())
+  id         String          @id @default(cuid())
+  category   ExpenseCategory
+  concept    String
+  amount     Decimal         @db.Decimal(10, 2)
+  spentAt    DateTime        @default(now())
   // Comprobante opcional (UploadThing)
-  receiptUrl  String?         @db.Text
-  receiptKey  String?
-  notes       String?         @db.Text
+  receiptUrl String?         @db.Text
+  receiptKey String?
+  notes      String?         @db.Text
 
   registeredById String?
   createdAt      DateTime @default(now())
@@ -649,18 +655,18 @@ enum WaStatus {
 // Log de todos los mensajes (entrantes y salientes). El documento lo exige:
 // destinatario, fecha/hora, canal y estado del envio.
 model WhatsappMessage {
-  id          String      @id @default(cuid())
-  direction   WaDirection
-  phone       String // E.164 del contacto (el usuario)
-  body        String      @db.Text
-  status      WaStatus
+  id        String      @id @default(cuid())
+  direction WaDirection
+  phone     String // E.164 del contacto (el usuario)
+  body      String      @db.Text
+  status    WaStatus
   // Tipo de notificacion saliente (recordatorio, confirmacion, etc.) o "bot"/"manual"
-  kind        String?
+  kind      String?
   // Referencias opcionales
-  studentId   String?
-  wamid       String? // id del mensaje en WhatsApp
-  error       String?     @db.Text
-  createdAt   DateTime    @default(now())
+  studentId String?
+  wamid     String? // id del mensaje en WhatsApp
+  error     String?     @db.Text
+  createdAt DateTime    @default(now())
 
   student Student? @relation(fields: [studentId], references: [id])
 
@@ -697,20 +703,20 @@ enum TeacherDocType {
 }
 
 model Teacher {
-  id           String        @id @default(cuid())
-  fullName     String
-  dpi          String?       @unique
-  phone        String?
-  email        String?
+  id          String   @id @default(cuid())
+  fullName    String
+  dpi         String?  @unique
+  phone       String?
+  email       String?
   // Datos profesionales
-  title        String? // titulo / profesion
-  collegiate   String? // numero de colegiado activo
-  specialty    String?
-  notes        String?       @db.Text
-  active       Boolean       @default(true)
-  createdById  String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  title       String? // titulo / profesion
+  collegiate  String? // numero de colegiado activo
+  specialty   String?
+  notes       String?  @db.Text
+  active      Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Un catedratico puede tener varios roles (tabla pivote: MySQL no soporta enum[])
   roles     TeacherRoleAssignment[]
@@ -749,7 +755,6 @@ model TeacherDocument {
 // Acta de Inauguracion (cohorte de un nuevo ciclo). Distinta a las actas de
 // calificaciones. Guarda los datos variables + la lista de alumnos (snapshot).
 // ----------------------------------------------------------------------------
-
 
 // ----------------------------------------------------------------------------
 // Invitaciones al portal del alumno. El admin genera un link único (token):

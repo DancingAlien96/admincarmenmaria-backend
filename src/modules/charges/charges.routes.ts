@@ -13,6 +13,7 @@ import {
   applyCohortSchema,
   createPlanItemSchema,
   updatePlanItemSchema,
+  propagatePlanItemSchema,
 } from "./charges.schemas.js";
 import {
   listController,
@@ -26,6 +27,8 @@ import {
   createPlanItemController,
   updatePlanItemController,
   deletePlanItemController,
+  planItemImpactController,
+  propagatePlanItemController,
 } from "./charges.controller.js";
 
 export const chargesRouter = Router();
@@ -59,6 +62,19 @@ chargesRouter.delete(
   canEdit,
   validate({ params: chargeIdParam }),
   asyncHandler(deletePlanItemController)
+);
+// Impacto de un item del plan en cuotas ya asignadas + propagar cambios
+chargesRouter.get(
+  "/plan-template/:id/impact",
+  canRead,
+  validate({ params: chargeIdParam }),
+  asyncHandler(planItemImpactController)
+);
+chargesRouter.post(
+  "/plan-template/:id/propagate",
+  canEdit,
+  validate({ params: chargeIdParam, body: propagatePlanItemSchema }),
+  asyncHandler(propagatePlanItemController)
 );
 // Aplicar el plan general a toda una cohorte
 chargesRouter.post(

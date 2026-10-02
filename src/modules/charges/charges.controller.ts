@@ -62,3 +62,11 @@ export async function deletePlanItemController(req: Request, res: Response) {
   const item = await service.deactivatePlanItem(req.params.id);
   res.json({ item });
 }
+
+export async function planItemImpactController(req: Request, res: Response) {
+  res.json(await service.planItemImpact(req.params.id));
+}
+
+export async function propagatePlanItemController(req: Request, res: Response) {
+  res.json(await service.propagatePlanItem(req.params.id, req.body));
+}

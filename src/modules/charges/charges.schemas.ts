@@ -53,6 +53,12 @@ export const updatePlanItemSchema = z.object({
   active: z.boolean().optional(),
 });
 
+// Propagar el monto/concepto actual de un item del plan a cuotas pendientes
+export const propagatePlanItemSchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100).nullable().optional(),
+  onlyFuture: z.boolean().default(true),
+});
+
 export const listChargesQuery = z.object({
   studentId: z.string().optional(),
   status: z.enum(STATUS).optional(),
@@ -74,3 +80,4 @@ export type CuotaPlanInput = z.infer<typeof cuotaPlanSchema>;
 export type ApplyCohortInput = z.infer<typeof applyCohortSchema>;
 export type CreatePlanItemInput = z.infer<typeof createPlanItemSchema>;
 export type UpdatePlanItemInput = z.infer<typeof updatePlanItemSchema>;
+export type PropagatePlanItemInput = z.infer<typeof propagatePlanItemSchema>;

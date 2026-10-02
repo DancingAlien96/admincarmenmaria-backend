@@ -10,6 +10,7 @@ import type {
   ApplyCohortInput,
   CreatePlanItemInput,
   UpdatePlanItemInput,
+  PropagatePlanItemInput,
 } from "./charges.schemas.js";
 
 // Suma neta (monto - descuento) de pagos ACTIVOS por cargo
@@ -214,6 +215,133 @@ export async function deactivatePlanItem(id: string) {
   });
 }
 
+// --- Propagar cambios del plan a cuotas ya asignadas -----------------------
+// Solo se tocan cuotas PENDIENTES (las PAGADAS y ANULADAS nunca cambian).
+// Las que tienen abono parcial se ajustan y se recalcula su estado.
+
+function propagateWhere(
+  planItemId: string,
+  opts: { year?: number | null; onlyFuture?: boolean }
+): Prisma.ChargeWhereInput {
+  return {
+    planItemId,
+    status: "PENDIENTE",
+    ...(opts.onlyFuture ? { dueDate: { gte: startOfTodayUTC() } } : {}),
+    ...(opts.year
+      ? {
+          student: {
+            enrollmentDate: {
+              gte: new Date(Date.UTC(opts.year, 0, 1)),
+              lt: new Date(Date.UTC(opts.year + 1, 0, 1)),
+            },
+          },
+        }
+      : {}),
+  };
+}
+
+function startOfTodayUTC() {
+  const n = new Date();
+  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+}
+
+// Vista previa: cuántas cuotas asignadas dependen de este item del plan,
+// desglosadas por promoción (año de inscripción) y por situación.
+export async function planItemImpact(id: string) {
+  const item = await prisma.cuotaPlanItem.findUnique({ where: { id } });
+  if (!item) throw notFound("Cuota del plan no encontrada");
+
+  const charges = await prisma.charge.findMany({
+    where: { planItemId: id, status: { not: "ANULADO" } },
+    select: {
+      id: true,
+      amount: true,
+      status: true,
+      dueDate: true,
+      student: { select: { enrollmentDate: true } },
+    },
+  });
+  const paid = await paidByCharge(charges.map((c) => c.id));
+  const today = startOfTodayUTC();
+
+  type Row = {
+    year: number | null;
+    pending: number; // sin pagar, aún no vence
+    overdue: number; // sin pagar, ya vencida
+    partial: number; // con abono parcial (incluida en pending/overdue)
+    paid: number; // pagadas (no se tocan)
+  };
+  const byYear = new Map<number | null, Row>();
+  for (const c of charges) {
+    const year = c.student.enrollmentDate
+      ? c.student.enrollmentDate.getUTCFullYear()
+      : null;
+    const row =
+      byYear.get(year) ??
+      { year, pending: 0, overdue: 0, partial: 0, paid: 0 };
+    if (c.status === "PAGADO") row.paid++;
+    else {
+      if (c.dueDate < today) row.overdue++;
+      else row.pending++;
+      if ((paid.get(c.id) ?? 0) > 0) row.partial++;
+    }
+    byYear.set(year, row);
+  }
+  const cohorts = [...byYear.values()].sort(
+    (a, b) => (b.year ?? 0) - (a.year ?? 0)
+  );
+  const totals = cohorts.reduce(
+    (t, r) => ({
+      pending: t.pending + r.pending,
+      overdue: t.overdue + r.overdue,
+      partial: t.partial + r.partial,
+      paid: t.paid + r.paid,
+    }),
+    { pending: 0, overdue: 0, partial: 0, paid: 0 }
+  );
+  return {
+    item: { ...item, amount: Number(item.amount) },
+    cohorts,
+    totals,
+  };
+}
+
+// Aplica el monto y concepto actuales del item a las cuotas pendientes que
+// salieron de él (opcionalmente solo una promoción y/o solo las que no vencen).
+export async function propagatePlanItem(
+  id: string,
+  input: PropagatePlanItemInput
+) {
+  const item = await prisma.cuotaPlanItem.findUnique({ where: { id } });
+  if (!item) throw notFound("Cuota del plan no encontrada");
+
+  const where = propagateWhere(id, input);
+  const targets = await prisma.charge.findMany({
+    where,
+    select: { id: true },
+  });
+  if (targets.length === 0) return { updated: 0, nowPaid: 0 };
+
+  const ids = targets.map((t) => t.id);
+  await prisma.charge.updateMany({
+    where: { id: { in: ids } },
+    data: { amount: item.amount, concept: item.concept },
+  });
+
+  // Si bajó el precio, una cuota con abono puede quedar cubierta -> PAGADO
+  const paid = await paidByCharge(ids);
+  const nowPaidIds = ids.filter(
+    (cid) => (paid.get(cid) ?? 0) >= Number(item.amount)
+  );
+  if (nowPaidIds.length > 0) {
+    await prisma.charge.updateMany({
+      where: { id: { in: nowPaidIds } },
+      data: { status: "PAGADO" },
+    });
+  }
+  return { updated: ids.length, nowPaid: nowPaidIds.length };
+}
+
 // Crea los Charge de un estudiante a partir del plan general. Devuelve
 // "created" (cuántas cuotas se crearon) o "skipped" si ya tenía cuotas.
 async function buildChargesFromPlan(
@@ -242,6 +370,7 @@ async function buildChargesFromPlan(
 
   const data: Prisma.ChargeCreateManyInput[] = items.map((it) => ({
     studentId,
+    planItemId: it.id,
     concept: it.concept,
     amount: it.amount,
     // Vence el día 1 del mes correspondiente (UTC para no correrse por zona).
