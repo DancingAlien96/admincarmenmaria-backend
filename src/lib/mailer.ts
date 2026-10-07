@@ -124,6 +124,7 @@ export async function sendBrandedMail(input: {
   heading: string;
   bodyHtml: string;
   text: string;
+  attachments?: MailAttachment[];
 }): Promise<{ sent: boolean }> {
   if (!isMailConfigured()) return { sent: false };
   const logo = loadLogo();
@@ -152,7 +153,7 @@ export async function sendBrandedMail(input: {
       subject: input.subject,
       text: input.text,
       html,
-      attachments: logo ? [logo] : undefined,
+      attachments: [...(logo ? [logo] : []), ...(input.attachments ?? [])],
     });
     return { sent: true };
   } catch (err) {

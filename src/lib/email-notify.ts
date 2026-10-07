@@ -1,5 +1,8 @@
 import { prisma } from "./prisma.js";
-import { sendBrandedMail } from "./mailer.js";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { sendBrandedMail, type MailAttachment } from "./mailer.js";
+import { UPLOAD_ROOT } from "./storage.js";
 import { paidByCharge } from "../modules/charges/charges.service.js";
 
 function fmtMoney(n: number): string {
@@ -58,49 +61,174 @@ export async function sendPaymentReceiptEmail(paymentId: string): Promise<void> 
   });
 }
 
-// --- 2. Correo masivo a estudiantes -----------------------------------------
+// --- 2. Correo masivo ------------------------------------------------------
+// Destinatarios: estudiantes (todos o una promoción), catedráticos, o personas
+// específicas (alumnos/catedráticos elegidos y correos escritos a mano).
+// Admite adjuntos ya subidos a /api/uploads (se leen del disco por su key).
 
-export async function sendBulkEmailToStudents(input: {
+export type BulkAudience = "students" | "teachers" | "custom";
+
+export interface BulkEmailInput {
   subject: string;
   message: string;
+  audience: BulkAudience;
   year?: number;
-}): Promise<{ total: number; sent: number; skipped: number }> {
-  const where: Record<string, unknown> = {
-    archived: false,
-    status: "ACTIVO",
-    email: { not: null },
-  };
-  if (input.year) {
-    where.enrollmentDate = {
-      gte: new Date(Date.UTC(input.year, 0, 1)),
-      lt: new Date(Date.UTC(input.year + 1, 0, 1)),
-    };
-  }
-  const students = await prisma.student.findMany({
-    where,
-    select: { email: true, fullName: true },
-  });
+  studentIds?: string[];
+  teacherIds?: string[];
+  emails?: string[];
+  attachments?: { key: string; name: string }[];
+}
 
+interface Recipient {
+  email: string;
+  name: string | null;
+}
+
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACH_BYTES = 15 * 1024 * 1024;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Docentes: catedráticos del registro + usuarios con rol DOCENTE.
+async function teacherRecipients(ids?: string[]): Promise<Recipient[]> {
+  const [teachers, users] = await Promise.all([
+    prisma.teacher.findMany({
+      where: {
+        active: true,
+        email: { not: null },
+        ...(ids ? { id: { in: ids } } : {}),
+      },
+      select: { email: true, fullName: true },
+    }),
+    ids
+      ? Promise.resolve([] as { email: string; name: string }[])
+      : prisma.user.findMany({
+          where: { role: "DOCENTE", active: true },
+          select: { email: true, name: true },
+        }),
+  ]);
+  return [
+    ...teachers.map((t) => ({ email: t.email as string, name: t.fullName })),
+    ...users.map((u) => ({ email: u.email, name: u.name })),
+  ];
+}
+
+export async function resolveBulkRecipients(
+  input: BulkEmailInput
+): Promise<Recipient[]> {
+  let list: Recipient[] = [];
+  if (input.audience === "students") {
+    const students = await prisma.student.findMany({
+      where: {
+        archived: false,
+        status: "ACTIVO",
+        email: { not: null },
+        ...(input.year
+          ? {
+              enrollmentDate: {
+                gte: new Date(Date.UTC(input.year, 0, 1)),
+                lt: new Date(Date.UTC(input.year + 1, 0, 1)),
+              },
+            }
+          : {}),
+      },
+      select: { email: true, fullName: true },
+    });
+    list = students.map((s) => ({ email: s.email as string, name: s.fullName }));
+  } else if (input.audience === "teachers") {
+    list = await teacherRecipients();
+  } else {
+    const [students, teachers] = await Promise.all([
+      input.studentIds?.length
+        ? prisma.student.findMany({
+            where: { id: { in: input.studentIds }, email: { not: null } },
+            select: { email: true, fullName: true },
+          })
+        : Promise.resolve([]),
+      input.teacherIds?.length
+        ? teacherRecipients(input.teacherIds)
+        : Promise.resolve([]),
+    ]);
+    list = [
+      ...students.map((s) => ({ email: s.email as string, name: s.fullName })),
+      ...teachers,
+      ...(input.emails ?? [])
+        .map((e) => e.trim())
+        .filter((e) => EMAIL_RE.test(e))
+        .map((e) => ({ email: e, name: null })),
+    ];
+  }
+  // Sin duplicados (mismo correo una sola vez)
+  const seen = new Set<string>();
+  return list.filter((r) => {
+    const k = r.email.trim().toLowerCase();
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+// Lee los adjuntos del disco (solo archivos subidos al sistema).
+export async function loadBulkAttachments(
+  files: { key: string; name: string }[] = []
+): Promise<MailAttachment[]> {
+  if (files.length > MAX_ATTACHMENTS) {
+    throw new Error(`Máximo ${MAX_ATTACHMENTS} archivos adjuntos`);
+  }
+  const out: MailAttachment[] = [];
+  let total = 0;
+  for (const f of files) {
+    const key = path.basename(f.key); // evita rutas fuera de uploads
+    const content = await fs.readFile(path.join(UPLOAD_ROOT, key));
+    total += content.length;
+    if (total > MAX_ATTACH_BYTES) {
+      throw new Error("Los adjuntos superan 15 MB en total");
+    }
+    out.push({ filename: f.name || key, content });
+  }
+  return out;
+}
+
+export async function sendBulkEmail(
+  input: BulkEmailInput,
+  recipients: Recipient[],
+  attachments: MailAttachment[]
+): Promise<{ total: number; sent: number; skipped: number }> {
   const bodyMsg = escapeHtml(input.message).replace(/\n/g, "<br>");
   let sent = 0;
   let skipped = 0;
-  for (const s of students) {
-    if (!s.email) {
-      skipped++;
-      continue;
-    }
-    const body = `<p>Hola, ${firstName(s.fullName)}:</p><p>${bodyMsg}</p>`;
-    const r = await sendBrandedMail({
-      to: s.email,
+  for (const r of recipients) {
+    const hello = r.name ? `Hola, ${firstName(r.name)}:` : "Hola:";
+    const res = await sendBrandedMail({
+      to: r.email,
       subject: input.subject,
       heading: input.subject,
-      bodyHtml: body,
-      text: `Hola, ${firstName(s.fullName)}:\n\n${input.message}`,
+      bodyHtml: `<p>${hello}</p><p>${bodyMsg}</p>`,
+      text: `${hello}\n\n${input.message}`,
+      attachments,
     });
-    if (r.sent) sent++;
+    if (res.sent) sent++;
     else skipped++;
   }
-  return { total: students.length, sent, skipped };
+  return { total: recipients.length, sent, skipped };
+}
+
+// Buscador de destinatarios para "personas específicas".
+export async function searchEmailRecipients(search: string) {
+  const q = search.trim();
+  if (q.length < 2) return { students: [], teachers: [] };
+  const [students, teachers] = await Promise.all([
+    prisma.student.findMany({
+      where: { email: { not: null }, fullName: { contains: q } },
+      select: { id: true, fullName: true, email: true, status: true },
+      take: 10,
+    }),
+    prisma.teacher.findMany({
+      where: { active: true, email: { not: null }, fullName: { contains: q } },
+      select: { id: true, fullName: true, email: true },
+      take: 10,
+    }),
+  ]);
+  return { students, teachers };
 }
 
 // --- 3. Recordatorios de cuotas por correo (programado a diario) -------------

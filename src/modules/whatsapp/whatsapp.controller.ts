@@ -4,7 +4,12 @@ import { verifyWebhookSignature } from "../../lib/ycloud.js";
 import { badRequest } from "../../lib/http-error.js";
 import { isMailConfigured, sendMail } from "../../lib/mailer.js";
 import {
-  sendBulkEmailToStudents,
+  sendBulkEmail,
+  resolveBulkRecipients,
+  loadBulkAttachments,
+  searchEmailRecipients,
+  type BulkAudience,
+  type BulkEmailInput,
   runEmailPaymentReminders,
 } from "../../lib/email-notify.js";
 
@@ -31,18 +36,68 @@ export async function testEmailController(req: Request, res: Response) {
   res.json({ sent: true, to });
 }
 
-// Correo masivo a estudiantes (todos o de un año).
+// Correo masivo: estudiantes (todos o una promoción), catedráticos o personas
+// específicas, con adjuntos opcionales. Responde de inmediato con el número
+// de destinatarios y envía en segundo plano (con adjuntos puede tardar).
 export async function bulkEmailController(req: Request, res: Response) {
-  const subject = String(req.body?.subject ?? "").trim();
-  const message = String(req.body?.message ?? "").trim();
-  const year = req.body?.year ? Number(req.body.year) : undefined;
+  const b = req.body ?? {};
+  const subject = String(b.subject ?? "").trim();
+  const message = String(b.message ?? "").trim();
   if (subject.length < 2) throw badRequest("Escribe un asunto");
   if (message.length < 2) throw badRequest("Escribe un mensaje");
   if (!isMailConfigured()) {
     throw badRequest("El correo (SMTP) aún no está configurado en el servidor.");
   }
-  const result = await sendBulkEmailToStudents({ subject, message, year });
-  res.json(result);
+  const audience: BulkAudience =
+    b.audience === "teachers" || b.audience === "custom"
+      ? b.audience
+      : "students";
+  const strArr = (v: unknown) =>
+    Array.isArray(v) ? v.map(String).filter(Boolean) : undefined;
+  const input: BulkEmailInput = {
+    subject,
+    message,
+    audience,
+    year: b.year ? Number(b.year) : undefined,
+    studentIds: strArr(b.studentIds),
+    teacherIds: strArr(b.teacherIds),
+    emails: strArr(b.emails),
+    attachments: Array.isArray(b.attachments)
+      ? b.attachments
+          .filter((a: unknown) => a && typeof a === "object")
+          .map((a: { key?: unknown; name?: unknown }) => ({
+            key: String(a.key ?? ""),
+            name: String(a.name ?? ""),
+          }))
+          .filter((a: { key: string }) => a.key)
+      : [],
+  };
+
+  const recipients = await resolveBulkRecipients(input);
+  if (recipients.length === 0) {
+    throw badRequest("No hay destinatarios con correo para este envío");
+  }
+  let attachments;
+  try {
+    attachments = await loadBulkAttachments(input.attachments);
+  } catch (err) {
+    throw badRequest((err as Error).message || "No se pudieron leer los adjuntos");
+  }
+
+  void sendBulkEmail(input, recipients, attachments)
+    .then((r) =>
+      console.log(
+        `[correo masivo] "${subject}": ${r.sent}/${r.total} enviados, ${r.skipped} con error`
+      )
+    )
+    .catch((e) => console.error("[correo masivo]", (e as Error).message));
+
+  res.json({ queued: recipients.length });
+}
+
+// Buscador de destinatarios (alumnos y catedráticos con correo)
+export async function emailRecipientsController(req: Request, res: Response) {
+  res.json(await searchEmailRecipients(String(req.query.search ?? "")));
 }
 
 // Ejecuta los recordatorios de cuotas por correo (por vencer / mora).
