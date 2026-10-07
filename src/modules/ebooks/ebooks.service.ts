@@ -27,6 +27,44 @@ export function listEbooks(includeInactive = false, forAdmission?: boolean) {
   });
 }
 
+export interface UpdateEbookInput {
+  title?: string;
+  description?: string | null;
+  author?: string | null;
+  category?: string | null;
+  // Portada nueva (ya subida) o removeCover para quitarla
+  coverUrl?: string | null;
+  coverKey?: string | null;
+  removeCover?: boolean;
+}
+
+// Edita los datos de un material; al cambiar o quitar la portada se borra el
+// archivo anterior del disco.
+export async function updateEbook(id: string, input: UpdateEbookInput) {
+  const eb = await prisma.ebook.findUnique({ where: { id } });
+  if (!eb) throw notFound("Material no encontrado");
+  const newCover = !!input.coverUrl;
+  const updated = await prisma.ebook.update({
+    where: { id },
+    data: {
+      title: input.title ?? undefined,
+      description:
+        input.description !== undefined ? input.description || null : undefined,
+      author: input.author !== undefined ? input.author || null : undefined,
+      category: input.category !== undefined ? input.category || null : undefined,
+      ...(newCover
+        ? { coverUrl: input.coverUrl, coverKey: input.coverKey || null }
+        : input.removeCover
+          ? { coverUrl: null, coverKey: null }
+          : {}),
+    },
+  });
+  if ((newCover || input.removeCover) && eb.coverKey) {
+    await deleteFile(eb.coverKey);
+  }
+  return updated;
+}
+
 export async function setEbookAdmission(id: string, forAdmission: boolean) {
   const eb = await prisma.ebook.findUnique({ where: { id } });
   if (!eb) throw notFound("Material no encontrado");

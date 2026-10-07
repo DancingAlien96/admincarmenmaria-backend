@@ -12,6 +12,9 @@ import {
   testEmailController,
   bulkEmailController,
   emailRecipientsController,
+  getEmailDesignController,
+  previewEmailDesignController,
+  saveEmailDesignController,
   runEmailRemindersController,
 } from "./whatsapp.controller.js";
 
@@ -28,6 +31,13 @@ whatsappRouter.post("/send", canEdit, asyncHandler(sendController));
 whatsappRouter.post("/bulk", canEdit, asyncHandler(bulkController));
 whatsappRouter.post("/test-email", canEdit, asyncHandler(testEmailController));
 whatsappRouter.post("/bulk-email", canEdit, asyncHandler(bulkEmailController));
+whatsappRouter.get("/email-design", canRead, asyncHandler(getEmailDesignController));
+whatsappRouter.post(
+  "/email-design/preview",
+  canEdit,
+  asyncHandler(previewEmailDesignController)
+);
+whatsappRouter.put("/email-design", canEdit, asyncHandler(saveEmailDesignController));
 whatsappRouter.get(
   "/email-recipients",
   canEdit,

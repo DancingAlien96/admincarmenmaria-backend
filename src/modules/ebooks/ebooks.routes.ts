@@ -12,6 +12,7 @@ import {
   createEbook,
   deleteEbook,
   setEbookAdmission,
+  updateEbook,
 } from "./ebooks.service.js";
 
 export const ebooksRouter = Router();
@@ -30,6 +31,16 @@ const createEbookSchema = z.object({
 });
 
 const admissionSchema = z.object({ forAdmission: z.boolean() });
+
+const updateEbookSchema = z.object({
+  title: z.string().min(2, "El título es requerido").trim().optional(),
+  description: z.string().trim().optional().nullable(),
+  author: z.string().trim().optional().nullable(),
+  category: z.string().trim().optional().nullable(),
+  coverUrl: z.string().url().optional().nullable(),
+  coverKey: z.string().optional().nullable(),
+  removeCover: z.boolean().optional(),
+});
 
 const idParam = z.object({ id: z.string().min(1) });
 
@@ -51,6 +62,16 @@ ebooksRouter.get(
       forAdmission = st === "ASPIRANTE" || st === "NO_ADMITIDO";
     }
     res.json({ ebooks: await listEbooks(all, forAdmission) });
+  })
+);
+
+// Editar datos y portada de un material ya subido (admin)
+ebooksRouter.patch(
+  "/:id",
+  requireAdmin,
+  validate({ params: idParam, body: updateEbookSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ ebook: await updateEbook(req.params.id, req.body) });
   })
 );
 

@@ -2,7 +2,15 @@ import type { Request, Response } from "express";
 import * as service from "./whatsapp.service.js";
 import { verifyWebhookSignature } from "../../lib/ycloud.js";
 import { badRequest } from "../../lib/http-error.js";
-import { isMailConfigured, sendMail } from "../../lib/mailer.js";
+import {
+  isMailConfigured,
+  sendBrandedMail,
+  getEmailDesign,
+  saveEmailDesign,
+  renderEmailPreview,
+  DEFAULT_EMAIL_DESIGN,
+  type EmailDesign,
+} from "../../lib/mailer.js";
 import {
   sendBulkEmail,
   resolveBulkRecipients,
@@ -24,15 +32,16 @@ export async function testEmailController(req: Request, res: Response) {
       "El correo (SMTP) aún no está configurado en el servidor."
     );
   }
-  await sendMail({
+  // Usa la plantilla de marca, para ver el diseño real del encabezado.
+  const r = await sendBrandedMail({
     to,
     subject: "Correo de prueba · Campus Carmen María",
+    heading: "Correo de prueba",
+    bodyHtml:
+      "<p>Este es un <strong>correo de prueba</strong> del sistema de la Escuela de Enfermería Carmen María.</p><p>Si lo recibiste, el envío de correos funciona correctamente y así se ve el encabezado actual.</p>",
     text: "Este es un correo de prueba. Si lo recibiste, el envío de correos del sistema funciona correctamente.",
-    html: `<div style="font-family:Arial,sans-serif;padding:16px;color:#111827;">
-      <p>Este es un <strong>correo de prueba</strong> del sistema de la Escuela de Enfermería Carmen María.</p>
-      <p>Si lo recibiste, el envío de correos funciona correctamente. ✅</p>
-    </div>`,
   });
+  if (!r.sent) throw badRequest("No se pudo enviar el correo de prueba");
   res.json({ sent: true, to });
 }
 
@@ -188,4 +197,38 @@ export async function bulkController(req: Request, res: Response) {
   const { sendBulk } = await import("./notifications.service.js");
   const result = await sendBulk({ templateName, studentIds });
   res.json(result);
+}
+
+// --- Diseño del encabezado de los correos -----------------------------------
+
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+function parseDesign(body: unknown): EmailDesign {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const str = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
+  const color = str(b.color, 7);
+  return {
+    style: b.style === "claro" ? "claro" : "solido",
+    color: HEX.test(color) ? color : DEFAULT_EMAIL_DESIGN.color,
+    title: str(b.title, 80) || DEFAULT_EMAIL_DESIGN.title,
+    subtitle: str(b.subtitle, 80),
+    bannerKey: b.bannerKey ? str(b.bannerKey, 200) : null,
+    bannerUrl: b.bannerUrl ? str(b.bannerUrl, 500) : null,
+  };
+}
+
+export async function getEmailDesignController(_req: Request, res: Response) {
+  const design = await getEmailDesign();
+  res.json({ design, preview: renderEmailPreview(design) });
+}
+
+// Vista previa de un diseño sin guardarlo
+export async function previewEmailDesignController(req: Request, res: Response) {
+  res.json({ preview: renderEmailPreview(parseDesign(req.body)) });
+}
+
+export async function saveEmailDesignController(req: Request, res: Response) {
+  const design = parseDesign(req.body);
+  await saveEmailDesign(design);
+  res.json({ design, preview: renderEmailPreview(design) });
 }
