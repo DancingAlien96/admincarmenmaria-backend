@@ -127,7 +127,12 @@ function loadBanner(key: string | null): MailAttachment | null {
 }
 
 const esc = (s: string) =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 // Arma el HTML completo del correo con el encabezado de marca. Para la vista
 // previa del panel, las imágenes van como URL/data URI en vez de adjuntos.
@@ -142,7 +147,7 @@ function layoutHtml(
     ? `<img src="${img.logo}" width="${solid ? 64 : 84}" height="${solid ? 64 : 84}" alt="Carmen María" style="display:block;margin:0 auto 10px;object-fit:contain;${solid ? "background:#ffffff;border-radius:12px;padding:4px;" : ""}" />`
     : "";
   const banner = img.banner
-    ? `<img src="${img.banner}" alt="" width="520" style="display:block;width:100%;height:auto;" />`
+    ? `<img src="${esc(img.banner)}" alt="" width="520" style="display:block;width:100%;height:auto;" />`
     : "";
   const header = solid
     ? `<div style="background:${d.color};padding:24px;text-align:center;">

@@ -203,6 +203,16 @@ export async function bulkController(req: Request, res: Response) {
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
+// Solo URLs http(s) para el banner (evita javascript:, data:, etc.)
+function safeHttpUrl(v: unknown): string | null {
+  try {
+    const u = new URL(String(v ?? ""));
+    return u.protocol === "https:" || u.protocol === "http:" ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 function parseDesign(body: unknown): EmailDesign {
   const b = (body ?? {}) as Record<string, unknown>;
   const str = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
@@ -213,7 +223,7 @@ function parseDesign(body: unknown): EmailDesign {
     title: str(b.title, 80) || DEFAULT_EMAIL_DESIGN.title,
     subtitle: str(b.subtitle, 80),
     bannerKey: b.bannerKey ? str(b.bannerKey, 200) : null,
-    bannerUrl: b.bannerUrl ? str(b.bannerUrl, 500) : null,
+    bannerUrl: b.bannerUrl ? safeHttpUrl(str(b.bannerUrl, 500)) : null,
   };
 }
 
