@@ -12,13 +12,25 @@ export interface CreateEbookInput {
   coverUrl?: string | null;
   coverKey?: string | null;
   sizeLabel?: string | null;
+  forAdmission?: boolean;
 }
 
-export function listEbooks(includeInactive = false) {
+// forAdmission: true = solo material de admisión, false = solo biblioteca de
+// alumnos, undefined = todo.
+export function listEbooks(includeInactive = false, forAdmission?: boolean) {
   return prisma.ebook.findMany({
-    where: includeInactive ? {} : { active: true },
+    where: {
+      ...(includeInactive ? {} : { active: true }),
+      ...(forAdmission === undefined ? {} : { forAdmission }),
+    },
     orderBy: { createdAt: "desc" },
   });
+}
+
+export async function setEbookAdmission(id: string, forAdmission: boolean) {
+  const eb = await prisma.ebook.findUnique({ where: { id } });
+  if (!eb) throw notFound("Material no encontrado");
+  return prisma.ebook.update({ where: { id }, data: { forAdmission } });
 }
 
 export async function createEbook(input: CreateEbookInput, userId?: string) {
@@ -33,6 +45,7 @@ export async function createEbook(input: CreateEbookInput, userId?: string) {
       coverUrl: input.coverUrl || null,
       coverKey: input.coverKey || null,
       sizeLabel: input.sizeLabel || null,
+      forAdmission: input.forAdmission ?? false,
       createdById: userId,
     },
   });

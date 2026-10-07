@@ -6,7 +6,13 @@ import { validate } from "../../middleware/validate.js";
 import { requireAuth } from "../../middleware/require-auth.js";
 import { requireAdmin } from "../../middleware/authorize.js";
 import { badRequest } from "../../lib/http-error.js";
-import { listEbooks, createEbook, deleteEbook } from "./ebooks.service.js";
+import { prisma } from "../../lib/prisma.js";
+import {
+  listEbooks,
+  createEbook,
+  deleteEbook,
+  setEbookAdmission,
+} from "./ebooks.service.js";
 
 export const ebooksRouter = Router();
 
@@ -20,18 +26,43 @@ const createEbookSchema = z.object({
   coverUrl: z.string().url().optional().or(z.literal("")).nullable(),
   coverKey: z.string().optional().nullable(),
   sizeLabel: z.string().trim().optional().nullable(),
+  forAdmission: z.boolean().optional(),
 });
+
+const admissionSchema = z.object({ forAdmission: z.boolean() });
 
 const idParam = z.object({ id: z.string().min(1) });
 
 ebooksRouter.use(requireAuth);
 
-// Listado: alumnos y personal ven los activos; admin puede ver todos (?all=true).
+// Listado: el aspirante solo ve el material de admisión y el alumno admitido
+// solo la biblioteca; el personal ve todo (admin incluye inactivos con ?all).
 ebooksRouter.get(
   "/",
   asyncHandler(async (req: Request, res: Response) => {
     const all = req.query.all === "true" && req.user?.role === "ADMIN";
-    res.json({ ebooks: await listEbooks(all) });
+    let forAdmission: boolean | undefined;
+    if (req.user?.role === "ESTUDIANTE") {
+      const u = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { student: { select: { status: true } } },
+      });
+      const st = u?.student?.status;
+      forAdmission = st === "ASPIRANTE" || st === "NO_ADMITIDO";
+    }
+    res.json({ ebooks: await listEbooks(all, forAdmission) });
+  })
+);
+
+// Mover un material entre admisión (aspirantes) y la biblioteca de alumnos.
+ebooksRouter.patch(
+  "/:id/admission",
+  requireAdmin,
+  validate({ params: idParam, body: admissionSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({
+      ebook: await setEbookAdmission(req.params.id, req.body.forAdmission),
+    });
   })
 );
 
