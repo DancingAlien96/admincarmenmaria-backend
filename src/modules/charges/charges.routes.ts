@@ -29,6 +29,7 @@ import {
   deletePlanItemController,
   planItemImpactController,
   propagatePlanItemController,
+  rescheduleController,
 } from "./charges.controller.js";
 
 export const chargesRouter = Router();
@@ -113,6 +114,13 @@ chargesRouter.post(
   canEdit,
   validate({ body: cuotaPlanSchema }),
   asyncHandler(planController)
+);
+// Corre el plan del estudiante a otro mes de inicio
+chargesRouter.post(
+  "/student/:studentId/reschedule",
+  canEdit,
+  validate({ body: cuotaPlanSchema }),
+  asyncHandler(rescheduleController)
 );
 chargesRouter.post(
   "/:id/annul",

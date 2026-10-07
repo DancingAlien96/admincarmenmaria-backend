@@ -55,16 +55,22 @@ export async function listGraduates(q: ListGraduatesQuery) {
       }
     : {};
 
-  const [total, data] = await Promise.all([
-    prisma.graduate.count({ where }),
-    prisma.graduate.findMany({
-      where,
-      select: listSelect,
-      orderBy: { graduationDate: "desc" },
-      skip: (q.page - 1) * q.pageSize,
-      take: q.pageSize,
-    }),
-  ]);
+  // Orden descendente por código MSPAS (comparación numérica: "120" va antes
+  // que "95"); los que no tienen código quedan al final, por fecha de
+  // graduación. Se ordena en memoria porque el código es texto en la BD.
+  const all = await prisma.graduate.findMany({
+    where,
+    select: listSelect,
+    orderBy: { graduationDate: "desc" },
+  });
+  all.sort((a, b) => {
+    if (!a.mspasCode && !b.mspasCode) return 0;
+    if (!a.mspasCode) return 1;
+    if (!b.mspasCode) return -1;
+    return b.mspasCode.localeCompare(a.mspasCode, "es", { numeric: true });
+  });
+  const total = all.length;
+  const data = all.slice((q.page - 1) * q.pageSize, q.page * q.pageSize);
 
   return {
     data,

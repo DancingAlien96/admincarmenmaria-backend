@@ -76,6 +76,24 @@ export async function listPayments(q: ListPaymentsQuery) {
     ...(q.source ? { source: q.source } : {}),
     ...(q.method ? { method: q.method } : {}),
     ...(q.unlinked === true ? { studentId: null } : {}),
+    ...(q.year
+      ? {
+          paidAt: {
+            gte: new Date(Date.UTC(q.year, 0, 1)),
+            lt: new Date(Date.UTC(q.year + 1, 0, 1)),
+          },
+        }
+      : {}),
+    ...(q.cohort
+      ? {
+          student: {
+            enrollmentDate: {
+              gte: new Date(Date.UTC(q.cohort, 0, 1)),
+              lt: new Date(Date.UTC(q.cohort + 1, 0, 1)),
+            },
+          },
+        }
+      : {}),
   };
 
   const [total, rows, totals] = await Promise.all([

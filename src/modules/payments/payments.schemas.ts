@@ -43,6 +43,10 @@ export const listPaymentsQuery = z.object({
     .enum(["true", "false"])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "true")),
+  // Año en que se hizo el pago
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+  // Promoción del alumno (año de inscripción)
+  cohort: z.coerce.number().int().min(2000).max(2100).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });

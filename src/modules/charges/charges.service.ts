@@ -451,6 +451,56 @@ export async function generateCuotaPlan(
   return { created };
 }
 
+// Corre el plan de cuotas de un estudiante (por si se eligió mal el mes de
+// inicio): la próxima cuota pendiente pasa al mes elegido y las demás
+// pendientes se desplazan los mismos meses. No toca la admisión ni las
+// cuotas pagadas o anuladas.
+export async function reschedulePlan(
+  studentId: string,
+  input: CuotaPlanInput
+) {
+  const [y, m] = input.startMonth.split("-").map(Number);
+  if (!y || !m) throw badRequest("Mes de inicio inválido (formato AAAA-MM)");
+
+  const pending = await prisma.charge.findMany({
+    where: {
+      studentId,
+      status: "PENDIENTE",
+      planItemId: { not: null },
+      ...NOT_ADMISSION_CHARGE,
+    },
+    select: { id: true, dueDate: true, status: true },
+    orderBy: { dueDate: "asc" },
+  });
+  if (pending.length === 0) {
+    throw badRequest("Este estudiante no tiene cuotas pendientes del plan");
+  }
+
+  // Referencia: la próxima cuota pendiente
+  const first = pending[0].dueDate;
+  const delta =
+    (y - first.getUTCFullYear()) * 12 + (m - 1 - first.getUTCMonth());
+  if (delta === 0) return { moved: 0, delta: 0 };
+
+  await prisma.$transaction(
+    pending.map((c) =>
+      prisma.charge.update({
+        where: { id: c.id },
+        data: {
+          dueDate: new Date(
+            Date.UTC(
+              c.dueDate.getUTCFullYear(),
+              c.dueDate.getUTCMonth() + delta,
+              c.dueDate.getUTCDate()
+            )
+          ),
+        },
+      })
+    )
+  );
+  return { moved: pending.length, delta };
+}
+
 // Aplica el plan general a toda una cohorte (estudiantes inscritos en un año,
 // activos, sin cuotas previas). Los que ya tienen plan se omiten.
 export async function applyPlanToCohort(

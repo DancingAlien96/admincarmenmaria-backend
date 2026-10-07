@@ -70,3 +70,7 @@ export async function planItemImpactController(req: Request, res: Response) {
 export async function propagatePlanItemController(req: Request, res: Response) {
   res.json(await service.propagatePlanItem(req.params.id, req.body));
 }
+
+export async function rescheduleController(req: Request, res: Response) {
+  res.json(await service.reschedulePlan(req.params.studentId, req.body));
+}
