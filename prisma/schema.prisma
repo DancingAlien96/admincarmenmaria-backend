@@ -227,6 +227,8 @@ model Student {
   portalUser       User?                  @relation("StudentPortalUser")
   docStatuses      StudentDocStatus[]
   grades           Grade[]
+  quizAttempts     QuizAttempt[]
+  surveyResponses  SurveyResponse[]
 
   @@index([dpi])
   @@index([status])
@@ -801,4 +803,51 @@ model Signatory {
   updatedAt    DateTime @updatedAt
 
   @@index([active])
+}
+
+// ----------------------------------------------------------------------------
+// Reto de Comprensión por fase (cuestionario que desbloquea la siguiente fase;
+// no afecta la nota) y Encuesta de satisfacción del estudiante.
+
+model QuizQuestion {
+  id           String   @id @default(cuid())
+  fase         Int // 1, 2, 3
+  question     String   @db.Text
+  options      Json // string[] (2 a 6 opciones)
+  correctIndex Int
+  order        Int      @default(0)
+  active       Boolean  @default(true)
+  createdById  String?
+  createdAt    DateTime @default(now())
+
+  @@index([fase, active])
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  studentId String
+  fase      Int
+  correct   Int
+  total     Int
+  score     Decimal  @db.Decimal(5, 2) // porcentaje 0-100
+  passed    Boolean
+  answers   Json // { questionId: optionIndex }
+  createdAt DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, fase])
+}
+
+model SurveyResponse {
+  id        String   @id @default(cuid())
+  studentId String
+  fase      Int
+  ratings   Json // { criterioKey: 1..5 }
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, fase])
 }

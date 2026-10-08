@@ -12,13 +12,88 @@ import {
   submitBoleta,
   startCardPayment,
   confirmCardPayment,
+  getMeForUser,
+  getActividadForUser,
+  getComprobanteForUser,
+  getRetoForUser,
+  submitRetoForUser,
+  getEncuestaForUser,
+  rateEncuestaForUser,
 } from "./portal.service.js";
+import { generateReceiptPDF, receiptFileName } from "../../lib/receipt-pdf.js";
 
 export const portalRouter = Router();
 
 portalRouter.use(requireAuth);
 
 // Dashboard del alumno logueado.
+// Reto de Comprensión de una fase
+portalRouter.get(
+  "/reto/:fase",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await getRetoForUser(req.user!.id, Number(req.params.fase)));
+  })
+);
+portalRouter.post(
+  "/reto/:fase",
+  asyncHandler(async (req: Request, res: Response) => {
+    const raw = (req.body?.answers ?? {}) as Record<string, unknown>;
+    const answers: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw)) answers[k] = Number(v);
+    res.json(await submitRetoForUser(req.user!.id, Number(req.params.fase), answers));
+  })
+);
+
+// Encuesta de satisfacción de una fase (se autoguarda por criterio)
+portalRouter.get(
+  "/encuesta/:fase",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await getEncuestaForUser(req.user!.id, Number(req.params.fase)));
+  })
+);
+portalRouter.put(
+  "/encuesta/:fase",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(
+      await rateEncuestaForUser(
+        req.user!.id,
+        Number(req.params.fase),
+        String(req.body?.clave ?? ""),
+        Number(req.body?.rating)
+      )
+    );
+  })
+);
+
+portalRouter.get(
+  "/me",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await getMeForUser(req.user!.id));
+  })
+);
+
+portalRouter.get(
+  "/actividad",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ eventos: await getActividadForUser(req.user!.id) });
+  })
+);
+
+// Recibo PDF del pago aprobado de una cuota
+portalRouter.get(
+  "/cuotas/:chargeId/comprobante",
+  asyncHandler(async (req: Request, res: Response) => {
+    const payment = await getComprobanteForUser(req.user!.id, req.params.chargeId);
+    const pdf = await generateReceiptPDF(payment);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${receiptFileName(payment)}"`
+    );
+    res.send(pdf);
+  })
+);
+
 portalRouter.get(
   "/dashboard",
   asyncHandler(async (req: Request, res: Response) => {

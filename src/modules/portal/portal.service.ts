@@ -5,6 +5,14 @@ import { hashPassword, verifyPassword } from "../../lib/auth.js";
 import { studentAccount, paidByCharge, recomputeChargeStatus } from "../charges/charges.service.js";
 import { getStudentChecklist } from "../doc-checklist/doc-checklist.service.js";
 import { getStudentFases } from "../grades/grades.service.js";
+import { getPaymentForReceipt } from "../payments/payments.service.js";
+import {
+  retoStatusByFase,
+  getRetoForStudent,
+  submitReto,
+  getEncuesta,
+  rateEncuesta,
+} from "../fase-extras/fase-extras.service.js";
 import { env } from "../../config/env.js";
 import { REVIEWABLE_PAYMENT, TILOPAY_VERIFY_NOTE } from "../../lib/payment-review.js";
 import {
@@ -241,7 +249,38 @@ export async function getDocumentosForUser(userId: string) {
 // Fases y calificaciones del alumno logueado (portal · Fases).
 export async function getFasesForUser(userId: string) {
   const studentId = await requireStudentId(userId);
-  return getStudentFases(studentId);
+  const [data, reto] = await Promise.all([
+    getStudentFases(studentId),
+    retoStatusByFase(studentId),
+  ]);
+  // Cada fase lleva el estado de su Reto de Comprensión
+  return {
+    ...data,
+    fases: data.fases.map((f) => ({ ...f, reto: reto[f.fase] })),
+  };
+}
+
+// Reto de Comprensión y Encuesta del alumno logueado
+export async function getRetoForUser(userId: string, fase: number) {
+  return getRetoForStudent(await requireStudentId(userId), fase);
+}
+export async function submitRetoForUser(
+  userId: string,
+  fase: number,
+  answers: Record<string, number>
+) {
+  return submitReto(await requireStudentId(userId), fase, answers);
+}
+export async function getEncuestaForUser(userId: string, fase: number) {
+  return getEncuesta(await requireStudentId(userId), fase);
+}
+export async function rateEncuestaForUser(
+  userId: string,
+  fase: number,
+  clave: string,
+  rating: number
+) {
+  return rateEncuesta(await requireStudentId(userId), fase, clave, rating);
 }
 
 // Días entre hoy y una fecha (solo fecha, sin hora).
@@ -445,4 +484,130 @@ export async function getStudentDashboard(studentId: string) {
     })),
     grades,
   };
+}
+
+// --- Marco del portal (diseño Readdy) ---------------------------------------
+
+// Datos del alumno para el menú lateral y el encabezado del portal.
+export async function getMeForUser(userId: string) {
+  const studentId = await requireStudentId(userId);
+  const s = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: {
+      id: true,
+      fullName: true,
+      expedienteNumber: true,
+      sede: true,
+      status: true,
+      photoUrl: true,
+    },
+  });
+  if (!s) throw notFound("Expediente no encontrado");
+  const [{ fases }, notifs] = await Promise.all([
+    getStudentFases(studentId),
+    getNotificacionesForUser(userId),
+  ]);
+  // Fase en curso: la primera que no está completada
+  const idx = fases.findIndex((f) => f.estado !== "completado");
+  const actual = idx === -1 ? fases[fases.length - 1] : fases[idx];
+  const completadas = fases.filter((f) => f.estado === "completado").length;
+  return {
+    student: s,
+    fase: {
+      numero: actual.fase,
+      nombre: actual.nombre,
+      subtitulo: actual.subtitulo,
+      total: fases.length,
+      completadas,
+    },
+    notifCount: notifs.total,
+  };
+}
+
+// Actividad reciente del alumno: pagos, documentos recibidos y cambios de
+// estado del expediente (más recientes primero).
+export async function getActividadForUser(userId: string, limit = 8) {
+  const studentId = await requireStudentId(userId);
+  const [pays, docs, history] = await Promise.all([
+    prisma.payment.findMany({
+      where: {
+        studentId,
+        OR: [{ status: "ACTIVO" }, REVIEWABLE_PAYMENT],
+      },
+      orderBy: { paidAt: "desc" },
+      take: limit,
+      select: { id: true, concept: true, status: true, paidAt: true },
+    }),
+    prisma.studentDocStatus.findMany({
+      where: { studentId, delivered: true },
+      orderBy: { receivedAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        receivedAt: true,
+        updatedAt: true,
+        requirement: { select: { name: true } },
+      },
+    }),
+    prisma.studentStatusHistory.findMany({
+      where: { studentId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: { id: true, fromStatus: true, toStatus: true, createdAt: true },
+    }),
+  ]);
+
+  type Evento = {
+    id: string;
+    tipo: "pago" | "documento" | "estado";
+    estado: "ok" | "revision" | "info";
+    titulo: string;
+    fecha: Date;
+  };
+  const eventos: Evento[] = [
+    ...pays.map((p) => ({
+      id: `p-${p.id}`,
+      tipo: "pago" as const,
+      estado: p.status === "ACTIVO" ? ("ok" as const) : ("revision" as const),
+      titulo:
+        p.status === "ACTIVO"
+          ? `Pago ${p.concept} aprobado`
+          : `Pago ${p.concept} registrado - En revisión`,
+      fecha: p.paidAt,
+    })),
+    ...docs.map((d) => ({
+      id: `d-${d.id}`,
+      tipo: "documento" as const,
+      estado: "ok" as const,
+      titulo: `Documento ${d.requirement.name} recibido`,
+      fecha: d.receivedAt ?? d.updatedAt,
+    })),
+    ...history
+      .filter((h) => h.fromStatus) // el alta inicial no es actividad
+      .map((h) => ({
+        id: `h-${h.id}`,
+        tipo: "estado" as const,
+        estado: "info" as const,
+        titulo:
+          h.fromStatus === "ASPIRANTE" && h.toStatus === "ACTIVO"
+            ? "Solicitud de ingreso aceptada"
+            : `Estado del expediente: ${h.toStatus.toLowerCase().replace("_", " ")}`,
+        fecha: h.createdAt,
+      })),
+  ];
+  return eventos
+    .sort((a, b) => b.fecha.getTime() - a.fecha.getTime())
+    .slice(0, limit);
+}
+
+// Comprobante (recibo PDF) del último pago aprobado de una cuota del alumno.
+export async function getComprobanteForUser(userId: string, chargeId: string) {
+  const studentId = await requireStudentId(userId);
+  const pay = await prisma.payment.findFirst({
+    where: { chargeId, studentId, status: "ACTIVO" },
+    orderBy: { paidAt: "desc" },
+    select: { id: true },
+  });
+  if (!pay) throw notFound("Esta cuota aún no tiene un pago aprobado");
+  return getPaymentForReceipt(pay.id);
 }

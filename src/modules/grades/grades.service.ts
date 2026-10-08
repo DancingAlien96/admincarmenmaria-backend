@@ -8,6 +8,23 @@ export const FASES: { fase: number; nombre: string; subtitulo: string }[] = [
   { fase: 3, nombre: "Fase III", subtitulo: "Práctica Supervisada" },
 ];
 
+// Ponderación de la nota de cada fase (suma 100).
+const PESOS: {
+  clave: "tareas" | "parciales" | "final";
+  nombre: string;
+  peso: number;
+  categorias: GradeCategory[];
+}[] = [
+  { clave: "tareas", nombre: "Tareas", peso: 50, categorias: ["TAREA"] },
+  {
+    clave: "parciales",
+    nombre: "Parciales",
+    peso: 30,
+    categorias: ["PRIMER_PARCIAL", "SEGUNDO_PARCIAL", "RECUPERACION"],
+  },
+  { clave: "final", nombre: "Examen Final", peso: 20, categorias: ["EXAMEN_FINAL"] },
+];
+
 // Orden de aparición de las categorías dentro de una fase.
 const CAT_ORDER: Record<GradeCategory, number> = {
   TAREA: 0,
@@ -89,15 +106,35 @@ export async function getStudentFases(studentId: string) {
           CAT_ORDER[a.category] - CAT_ORDER[b.category]
       );
 
+    // Nota ponderada: Tareas 50 %, Parciales (incl. recuperación) 30 %,
+    // Examen final 20 %. Si falta una categoría, se reparte entre las que hay.
+    const desglose = PESOS.map((p) => {
+      const del = items.filter((i) => p.categorias.includes(i.category));
+      const prom =
+        del.length > 0 ? del.reduce((s, i) => s + i.pct, 0) / del.length : null;
+      return {
+        clave: p.clave,
+        nombre: p.nombre,
+        peso: p.peso,
+        evaluaciones: del.length,
+        promedio: prom === null ? null : round1(prom),
+        puntos: prom === null ? null : round1((prom * p.peso) / 100),
+      };
+    });
+    const conNotas = desglose.filter((d) => d.promedio !== null);
+    const pesoTotal = conNotas.reduce((s, d) => s + d.peso, 0);
     const promedio =
-      items.length > 0
-        ? round1(items.reduce((s, i) => s + i.pct, 0) / items.length)
+      pesoTotal > 0
+        ? round1(
+            conNotas.reduce((s, d) => s + (d.promedio ?? 0) * d.peso, 0) /
+              pesoTotal
+          )
         : null;
     const tieneFinal = items.some((i) => i.category === "EXAMEN_FINAL");
     const estado: "completado" | "en-progreso" | "pendiente" =
       tieneFinal ? "completado" : items.length > 0 ? "en-progreso" : "pendiente";
 
-    return { ...f, items, promedio, estado };
+    return { ...f, items, promedio, estado, desglose };
   });
 
   const conNota = fases.filter((f) => f.promedio !== null);
