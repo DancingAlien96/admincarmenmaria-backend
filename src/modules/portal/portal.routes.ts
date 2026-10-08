@@ -41,7 +41,6 @@ portalRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     res.json({
       matricula: await submitMatriculaForUser(req.user!.id, {
-        fileUrl: String(req.body?.fileUrl ?? ""),
         fileKey: String(req.body?.fileKey ?? ""),
         fileName: req.body?.fileName ? String(req.body.fileName) : undefined,
       }),

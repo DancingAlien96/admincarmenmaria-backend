@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { badRequest, notFound } from "../../lib/http-error.js";
 import { getSetting, setSetting } from "../../lib/settings.js";
 import { deleteFile } from "../../lib/storage.js";
+import { env } from "../../config/env.js";
 
 // Matrícula: formulario que la escuela publica (plantilla) y que el alumno
 // admitido descarga, firma y sube en PDF; uno por año (ciclo).
@@ -83,7 +84,7 @@ export async function getMatricula(studentId: string) {
 // El alumno sube (o vuelve a subir) su matrícula firmada del ciclo actual.
 export async function submitMatricula(
   studentId: string,
-  input: { fileUrl: string; fileKey: string; fileName?: string }
+  input: { fileKey: string; fileName?: string }
 ) {
   const student = await prisma.student.findUnique({
     where: { id: studentId },
@@ -105,8 +106,16 @@ export async function submitMatricula(
   if (prev?.status === "APROBADA") {
     throw badRequest("Tu matrícula de este año ya fue aprobada");
   }
+  // Un mismo archivo no puede ser la matrícula de otra persona
+  const usado = await prisma.studentMatricula.findFirst({
+    where: { fileKey: key, NOT: { studentId } },
+    select: { id: true },
+  });
+  if (usado) throw badRequest("Sube tu propio archivo PDF de matrícula");
   const data = {
-    fileUrl: input.fileUrl,
+    // La URL se arma en el servidor a partir de la clave validada (no se
+    // confía en la que envía el navegador).
+    fileUrl: `${env.PUBLIC_API_URL}/uploads/${key}`,
     fileKey: key,
     fileName: input.fileName?.slice(0, 190) || null,
     status: "EN_REVISION" as const,
@@ -120,8 +129,8 @@ export async function submitMatricula(
     create: { studentId, year, ...data },
     update: data,
   });
-  // Al reemplazar, se borra el PDF anterior
-  if (prev && prev.fileKey !== key) await deleteFile(prev.fileKey);
+  // Al reemplazar NO se borra el archivo anterior: la clave la envía el
+  // navegador y podría apuntar a un archivo de otra sección del sistema.
   return serialize(saved);
 }
 

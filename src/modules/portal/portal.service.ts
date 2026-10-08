@@ -306,7 +306,7 @@ export async function getMatriculaForUser(userId: string) {
 }
 export async function submitMatriculaForUser(
   userId: string,
-  input: { fileUrl: string; fileKey: string; fileName?: string }
+  input: { fileKey: string; fileName?: string }
 ) {
   return submitMatricula(await requireStudentId(userId), input);
 }
