@@ -12,6 +12,7 @@ import {
   encuestaResumen,
   retoResumen,
 } from "./fase-extras.service.js";
+import { getCriterios, setCriterios } from "../../lib/settings.js";
 
 // Gestión del Reto de Comprensión y resultados de la encuesta (docente/admin)
 export const faseExtrasRouter = Router();
@@ -26,6 +27,26 @@ const questionSchema = z.object({
 const idParam = z.object({ id: z.string().min(1) });
 
 faseExtrasRouter.use(requireAuth, requireAdminOrDocente);
+
+// Criterios de aprobación (todas las fases): lo ve el personal, lo cambia el admin
+const criteriosSchema = z.object({
+  notaMinima: z.coerce.number().int().min(1).max(100),
+  retoMinimo: z.coerce.number().int().min(1).max(100),
+});
+faseExtrasRouter.get(
+  "/config",
+  asyncHandler(async (_req: Request, res: Response) => {
+    res.json(await getCriterios());
+  })
+);
+faseExtrasRouter.put(
+  "/config",
+  requireAdmin,
+  validate({ body: criteriosSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await setCriterios(req.body));
+  })
+);
 
 faseExtrasRouter.get(
   "/quiz",

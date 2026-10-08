@@ -1,12 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { badRequest, notFound } from "../../lib/http-error.js";
+import { getCriterios } from "../../lib/settings.js";
 
 // --- Reto de Comprensión -----------------------------------------------------
 // Cuestionario por fase. No afecta la nota; aprobarlo (>= 80 %) es requisito
 // para desbloquear la siguiente fase (solo si la fase tiene preguntas).
 
-export const RETO_APROBACION = 80;
 
 function assertFase(fase: number) {
   if (![1, 2, 3].includes(fase)) throw badRequest("Fase inválida");
@@ -95,7 +95,7 @@ export async function retoStatusByFase(studentId: string) {
 // Reto para el alumno (sin revelar respuestas) + su historial
 export async function getRetoForStudent(studentId: string, fase: number) {
   assertFase(fase);
-  const [rows, attempts] = await Promise.all([
+  const [rows, attempts, criterios] = await Promise.all([
     prisma.quizQuestion.findMany({
       where: { fase, active: true },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
@@ -104,6 +104,7 @@ export async function getRetoForStudent(studentId: string, fase: number) {
       where: { studentId, fase },
       orderBy: { createdAt: "desc" },
     }),
+    getCriterios(),
   ]);
   const best = attempts.reduce<number | null>(
     (m, a) => (m === null || Number(a.score) > m ? Number(a.score) : m),
@@ -111,7 +112,7 @@ export async function getRetoForStudent(studentId: string, fase: number) {
   );
   return {
     fase,
-    aprobacion: RETO_APROBACION,
+    aprobacion: criterios.retoMinimo,
     preguntas: rows.map((q) => ({
       id: q.id,
       question: q.question,
@@ -153,7 +154,7 @@ export async function submitReto(
   }));
   const correct = resultado.filter((r) => r.correcta).length;
   const score = Math.round((correct / rows.length) * 10000) / 100;
-  const passed = score >= RETO_APROBACION;
+  const passed = score >= (await getCriterios()).retoMinimo;
   await prisma.quizAttempt.create({
     data: {
       studentId,

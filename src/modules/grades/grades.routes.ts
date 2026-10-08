@@ -19,6 +19,7 @@ const createGradeSchema = z.object({
   fase: z.coerce.number().int().min(1).max(3),
   category: z.enum([
     "TAREA",
+    "ACTIVIDAD",
     "PRIMER_PARCIAL",
     "SEGUNDO_PARCIAL",
     "EXAMEN_FINAL",
@@ -28,6 +29,7 @@ const createGradeSchema = z.object({
   score: z.coerce.number().min(0),
   maxScore: z.coerce.number().positive().optional(),
   date: z.string().optional().nullable(),
+  faseItemId: z.string().optional().nullable(),
 });
 
 const idParam = z.object({ id: z.string().min(1) });

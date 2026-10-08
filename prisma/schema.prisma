@@ -87,11 +87,14 @@ model FaseItem {
   fileUrl     String?      @db.Text // para MATERIAL (presentaciones/guías)
   fileKey     String?
   sizeLabel   String?
+  // Ponderación: cuántos puntos (sobre 100) vale en la nota de la fase
+  puntos      Int?
   active      Boolean      @default(true)
   createdById String?
   createdAt   DateTime     @default(now())
 
-  createdBy User? @relation("FaseItemCreatedBy", fields: [createdById], references: [id])
+  createdBy User?   @relation("FaseItemCreatedBy", fields: [createdById], references: [id])
+  grades    Grade[]
 
   @@index([fase, kind])
   @@index([active])
@@ -100,6 +103,7 @@ model FaseItem {
 // Categoría de una calificación dentro de una fase (libro de calificaciones).
 enum GradeCategory {
   TAREA
+  ACTIVIDAD
   PRIMER_PARCIAL
   SEGUNDO_PARCIAL
   EXAMEN_FINAL
@@ -117,14 +121,18 @@ model Grade {
   score       Decimal       @db.Decimal(6, 2)
   maxScore    Decimal       @default(100) @db.Decimal(6, 2)
   date        DateTime?
+  // Actividad de la fase que se califica (define cuántos puntos vale)
+  faseItemId  String?
   createdById String?
   createdAt   DateTime      @default(now())
 
-  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  createdBy User?   @relation("GradeCreatedBy", fields: [createdById], references: [id])
+  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation("GradeCreatedBy", fields: [createdById], references: [id])
+  faseItem  FaseItem? @relation(fields: [faseItemId], references: [id], onDelete: SetNull)
 
   @@index([studentId])
   @@index([studentId, fase])
+  @@index([faseItemId])
 }
 
 // Biblioteca digital (E-Books): material de apoyo descargable para los alumnos.

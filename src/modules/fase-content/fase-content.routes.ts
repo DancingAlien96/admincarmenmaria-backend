@@ -21,6 +21,8 @@ const createSchema = z.object({
   fileUrl: z.string().url().optional().or(z.literal("")).nullable(),
   fileKey: z.string().optional().nullable(),
   sizeLabel: z.string().optional().nullable(),
+  // Cuántos puntos (sobre 100) vale en la nota de la fase
+  puntos: z.coerce.number().int().min(0).max(100).optional().nullable(),
 });
 const idParam = z.object({ id: z.string().min(1) });
 
@@ -57,6 +59,7 @@ faseContentRouter.post(
         fileUrl: b.fileUrl || null,
         fileKey: b.fileKey || null,
         sizeLabel: b.sizeLabel || null,
+        puntos: b.kind === "MATERIAL" ? null : (b.puntos ?? null),
         createdById: req.user?.id,
       },
     });
@@ -74,6 +77,7 @@ const updateSchema = z.object({
   fileUrl: z.string().url().optional().nullable(),
   fileKey: z.string().optional().nullable(),
   sizeLabel: z.string().optional().nullable(),
+  puntos: z.coerce.number().int().min(0).max(100).optional().nullable(),
 });
 
 faseContentRouter.patch(
@@ -92,6 +96,8 @@ faseContentRouter.patch(
         description: b.description !== undefined ? b.description || null : undefined,
         date: b.date !== undefined ? (b.date ? new Date(b.date) : null) : undefined,
         meta: b.meta !== undefined ? b.meta || null : undefined,
+        puntos:
+          b.puntos !== undefined && prev.kind !== "MATERIAL" ? b.puntos : undefined,
         ...(nuevoArchivo
           ? {
               fileUrl: b.fileUrl,
