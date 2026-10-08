@@ -17,21 +17,39 @@ function base(): string {
     : env.TILOPAY_BASE_URL + "/";
 }
 
+// Error devuelto por Tilopay (se registra el detalle; al alumno se le muestra
+// un mensaje claro en vez de "Error interno del servidor").
+export class TilopayError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "TilopayError";
+    this.status = status;
+  }
+}
+
+// Tilopay usa varias formas de error según el endpoint: message/description/type.
+function tilopayMessage(data: Record<string, unknown>, fallback: string) {
+  const m = data.message ?? data.description ?? data.type;
+  return typeof m === "string" && m.trim() ? m : fallback;
+}
+
 async function login(): Promise<string> {
   const res = await fetch(base() + "login", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
-      email: env.TILOPAY_API_USER,
+      apiuser: env.TILOPAY_API_USER,
       password: env.TILOPAY_API_PASSWORD,
     }),
   });
-  const data = (await res.json().catch(() => ({}))) as {
-    access_token?: string;
-    message?: string;
-  };
-  if (!res.ok || !data.access_token) {
-    throw new Error(data.message || "No se pudo autenticar con Tilopay");
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok || typeof data.access_token !== "string") {
+    console.error("[tilopay] login falló:", res.status, JSON.stringify(data).slice(0, 500));
+    throw new TilopayError(
+      tilopayMessage(data, "No se pudo autenticar con Tilopay"),
+      res.status
+    );
   }
   return data.access_token;
 }
@@ -68,6 +86,16 @@ export async function createCheckout(input: ProcessPaymentInput): Promise<string
     billToCountry: input.country || "GT",
     billToTelephone: input.phone || "00000000",
     billToEmail: input.email,
+    // Tilopay exige también los datos de envío: se usan los de facturación.
+    shipToFirstName: input.firstName || "Estudiante",
+    shipToLastName: input.lastName || "-",
+    shipToAddress: input.address || "Ciudad",
+    shipToAddress2: "",
+    shipToCity: input.city || "Guatemala",
+    shipToState: input.state || "Guatemala",
+    shipToZipPostCode: "01001",
+    shipToCountry: input.country || "GT",
+    shipToTelephone: input.phone || "00000000",
     orderNumber: input.orderNumber,
     capture: "1",
     subscription: "0",
@@ -85,12 +113,17 @@ export async function createCheckout(input: ProcessPaymentInput): Promise<string
     },
     body: JSON.stringify(body),
   });
-  const data = (await res.json().catch(() => ({}))) as {
-    url?: string;
-    message?: string;
-  };
-  if (!res.ok || !data.url) {
-    throw new Error(data.message || "Tilopay no devolvió el enlace de pago");
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok || typeof data.url !== "string") {
+    console.error(
+      "[tilopay] processPayment falló:",
+      res.status,
+      JSON.stringify(data).slice(0, 500)
+    );
+    throw new TilopayError(
+      tilopayMessage(data, "Tilopay no devolvió el enlace de pago"),
+      res.status
+    );
   }
   return data.url;
 }

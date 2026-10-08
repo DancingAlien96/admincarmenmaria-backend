@@ -1,5 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
-import { notFound, forbidden, badRequest } from "../../lib/http-error.js";
+import { notFound, forbidden, badRequest, HttpError } from "../../lib/http-error.js";
 import { normalizeName } from "../../lib/normalize.js";
 import { hashPassword, verifyPassword } from "../../lib/auth.js";
 import { studentAccount, paidByCharge, recomputeChargeStatus } from "../charges/charges.service.js";
@@ -165,20 +165,33 @@ export async function startCardPayment(userId: string, chargeId: string) {
   });
 
   const [firstName, ...rest] = student.fullName.trim().split(/\s+/);
-  const url = await createCheckout({
-    amount,
-    orderNumber,
-    redirect: `${env.FRONTEND_URL}/portal/pagos/retorno`,
-    firstName: firstName ?? "Estudiante",
-    lastName: rest.join(" ") || "-",
-    email: student.email,
-    phone: student.phonePrimary ?? undefined,
-    address: student.address ?? undefined,
-    city: student.municipality ?? undefined,
-    state: student.department ?? undefined,
-    country: "GT",
-  });
-  return { url };
+  try {
+    const url = await createCheckout({
+      amount,
+      orderNumber,
+      redirect: `${env.FRONTEND_URL}/portal/pagos/retorno`,
+      firstName: firstName ?? "Estudiante",
+      lastName: rest.join(" ") || "-",
+      email: student.email,
+      phone: student.phonePrimary ?? undefined,
+      address: student.address ?? undefined,
+      city: student.municipality ?? undefined,
+      state: student.department ?? undefined,
+      country: "GT",
+    });
+    return { url };
+  } catch (err) {
+    // No se pudo abrir la pasarela: se borra el intento y se avisa claro.
+    await prisma.payment.deleteMany({ where: { orderRef: orderNumber } });
+    console.error(
+      `[tilopay] no se pudo iniciar el pago de la cuota ${chargeId}:`,
+      (err as Error).message
+    );
+    throw new HttpError(
+      502,
+      "El pago con tarjeta no está disponible en este momento. Puedes pagar por transferencia subiendo tu boleta, o intentarlo más tarde."
+    );
+  }
 }
 
 // Confirma el retorno del checkout de Tilopay y marca la cuota si fue aprobado.
