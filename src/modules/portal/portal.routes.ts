@@ -19,6 +19,8 @@ import {
   submitRetoForUser,
   getEncuestaForUser,
   rateEncuestaForUser,
+  getMatriculaForUser,
+  submitMatriculaForUser,
 } from "./portal.service.js";
 import { generateReceiptPDF, receiptFileName } from "../../lib/receipt-pdf.js";
 
@@ -27,6 +29,26 @@ export const portalRouter = Router();
 portalRouter.use(requireAuth);
 
 // Dashboard del alumno logueado.
+// Matrícula del alumno: formulario, estado y subida del PDF firmado
+portalRouter.get(
+  "/matricula",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await getMatriculaForUser(req.user!.id));
+  })
+);
+portalRouter.post(
+  "/matricula",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({
+      matricula: await submitMatriculaForUser(req.user!.id, {
+        fileUrl: String(req.body?.fileUrl ?? ""),
+        fileKey: String(req.body?.fileKey ?? ""),
+        fileName: req.body?.fileName ? String(req.body.fileName) : undefined,
+      }),
+    });
+  })
+);
+
 // Reto de Comprensión de una fase
 portalRouter.get(
   "/reto/:fase",

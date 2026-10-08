@@ -13,6 +13,10 @@ import {
   getEncuesta,
   rateEncuesta,
 } from "../fase-extras/fase-extras.service.js";
+import {
+  getMatricula,
+  submitMatricula,
+} from "../matricula/matricula.service.js";
 import { env } from "../../config/env.js";
 import { REVIEWABLE_PAYMENT, TILOPAY_VERIFY_NOTE } from "../../lib/payment-review.js";
 import {
@@ -296,6 +300,17 @@ export async function rateEncuestaForUser(
   return rateEncuesta(await requireStudentId(userId), fase, clave, rating);
 }
 
+// Matrícula del alumno logueado (descarga del formulario y subida del PDF)
+export async function getMatriculaForUser(userId: string) {
+  return getMatricula(await requireStudentId(userId));
+}
+export async function submitMatriculaForUser(
+  userId: string,
+  input: { fileUrl: string; fileKey: string; fileName?: string }
+) {
+  return submitMatricula(await requireStudentId(userId), input);
+}
+
 // Días entre hoy y una fecha (solo fecha, sin hora).
 function daysBetween(due: Date): number {
   const now = new Date();
@@ -320,12 +335,38 @@ const money = (n: number) =>
 // pendientes. Se calculan al vuelo (sin persistencia de leído/no leído).
 export async function getNotificacionesForUser(userId: string) {
   const studentId = await requireStudentId(userId);
-  const [{ charges }, checklist] = await Promise.all([
+  const [{ charges }, checklist, matricula, student] = await Promise.all([
     studentAccount(studentId),
     getStudentChecklist(studentId),
+    getMatricula(studentId),
+    prisma.student.findUnique({ where: { id: studentId }, select: { status: true } }),
   ]);
 
   const items: Notif[] = [];
+
+  // Matrícula del año: falta subirla o fue rechazada (solo alumnos admitidos)
+  if (student?.status === "ACTIVO") {
+    const m = matricula.actual;
+    if (!m) {
+      items.push({
+        id: `matricula-${matricula.year}`,
+        tipo: "documento",
+        titulo: "Matrícula pendiente",
+        detalle: `Descarga el formulario de matrícula ${matricula.year}, fírmalo y súbelo en PDF.`,
+        fecha: null,
+        prioridad: "media",
+      });
+    } else if (m.status === "RECHAZADA") {
+      items.push({
+        id: `matricula-${matricula.year}`,
+        tipo: "documento",
+        titulo: "Matrícula rechazada",
+        detalle: m.note ? `Motivo: ${m.note}. Vuelve a subirla.` : "Vuelve a subirla.",
+        fecha: m.reviewedAt,
+        prioridad: "alta",
+      });
+    }
+  }
 
   for (const c of charges) {
     if (c.status !== "PENDIENTE" || c.saldo <= 0) continue;

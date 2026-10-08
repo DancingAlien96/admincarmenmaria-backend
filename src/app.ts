@@ -32,6 +32,7 @@ import { gradesRouter } from "./modules/grades/grades.routes.js";
 import { docenteRouter } from "./modules/docente/docente.routes.js";
 import { faseContentRouter } from "./modules/fase-content/fase-content.routes.js";
 import { faseExtrasRouter } from "./modules/fase-extras/fase-extras.routes.js";
+import { matriculaRouter } from "./modules/matricula/matricula.routes.js";
 
 export function createApp() {
   const app = express();
@@ -101,6 +102,7 @@ export function createApp() {
   app.use("/api/docente", docenteRouter);
   app.use("/api/fase-content", faseContentRouter);
   app.use("/api/fase-extras", faseExtrasRouter);
+  app.use("/api/matricula", matriculaRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);

@@ -229,6 +229,7 @@ model Student {
   grades           Grade[]
   quizAttempts     QuizAttempt[]
   surveyResponses  SurveyResponse[]
+  matriculas       StudentMatricula[]
 
   @@index([dpi])
   @@index([status])
@@ -850,4 +851,33 @@ model SurveyResponse {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, fase])
+}
+
+// ----------------------------------------------------------------------------
+// Matrícula: el alumno admitido sube el formulario de matrícula firmado (PDF),
+// uno por año (ciclo); la administración lo revisa.
+
+enum MatriculaStatus {
+  EN_REVISION
+  APROBADA
+  RECHAZADA
+}
+
+model StudentMatricula {
+  id           String          @id @default(cuid())
+  studentId    String
+  year         Int // ciclo
+  fileUrl      String          @db.Text
+  fileKey      String
+  fileName     String?
+  status       MatriculaStatus @default(EN_REVISION)
+  note         String?         @db.Text // motivo de rechazo / observación
+  uploadedAt   DateTime        @default(now())
+  reviewedAt   DateTime?
+  reviewedById String?
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, year])
+  @@index([status])
 }
