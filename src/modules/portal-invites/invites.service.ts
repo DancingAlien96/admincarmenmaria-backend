@@ -152,7 +152,13 @@ function assertInscripcionComplete(data: RegisterInput) {
   for (const [key, label] of req) {
     if (!data[key]) throw badRequest(`Falta ${label}.`);
   }
-  // La persona responsable es opcional.
+  // Al menos una persona responsable con nombre, parentesco y teléfono.
+  const ok = (data.guardians ?? []).some(
+    (g) => g.name?.trim() && g.relationship?.trim() && g.phone?.trim()
+  );
+  if (!ok) {
+    throw badRequest("Falta la persona responsable (nombre, parentesco y teléfono).");
+  }
 }
 
 // Consume la invitación: crea/activa la cuenta del alumno y lo deja logueado.
