@@ -30,6 +30,7 @@ import {
   isApproved,
   type ReturnParams,
 } from "../../lib/tilopay.js";
+import { diasHasta } from "../../lib/fecha-gt.js";
 
 // Resuelve el studentId de la cuenta (valida rol ESTUDIANTE).
 async function requireStudentId(userId: string) {
@@ -429,12 +430,8 @@ export async function submitMatriculaForUser(
 }
 
 // Días entre hoy y una fecha (solo fecha, sin hora).
-function daysBetween(due: Date): number {
-  const now = new Date();
-  const a = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-  const b = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate());
-  return Math.round((b - a) / 86400000);
-}
+// Días hasta el vencimiento (hora de Guatemala).
+const daysBetween = diasHasta;
 
 type Notif = {
   id: string;

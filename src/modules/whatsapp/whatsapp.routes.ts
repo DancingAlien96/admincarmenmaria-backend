@@ -16,6 +16,7 @@ import {
   previewEmailDesignController,
   saveEmailDesignController,
   runEmailRemindersController,
+  remindersStatusController,
 } from "./whatsapp.controller.js";
 
 // Rutas del panel (requieren sesion + seccion REMINDERS)
@@ -43,6 +44,7 @@ whatsappRouter.get(
   canEdit,
   asyncHandler(emailRecipientsController)
 );
+whatsappRouter.get("/reminders-status", canRead, asyncHandler(remindersStatusController));
 whatsappRouter.post(
   "/run-email-reminders",
   canEdit,

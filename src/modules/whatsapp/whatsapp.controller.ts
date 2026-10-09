@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import * as service from "./whatsapp.service.js";
 import { verifyWebhookSignature } from "../../lib/ycloud.js";
 import { badRequest } from "../../lib/http-error.js";
+import { runDailyReminders, ultimaEjecucion } from "../../lib/recordatorios-diarios.js";
 import {
   isMailConfigured,
   sendBrandedMail,
@@ -18,7 +19,6 @@ import {
   searchEmailRecipients,
   type BulkAudience,
   type BulkEmailInput,
-  runEmailPaymentReminders,
 } from "../../lib/email-notify.js";
 
 // Envia un correo de prueba para verificar la configuracion SMTP.
@@ -109,13 +109,14 @@ export async function emailRecipientsController(req: Request, res: Response) {
   res.json(await searchEmailRecipients(String(req.query.search ?? "")));
 }
 
-// Ejecuta los recordatorios de cuotas por correo (por vencer / mora).
+// Ejecuta ahora los recordatorios de cuotas (correo + push), si hoy todavía
+// no se enviaron (el envío automático corre a diario a las 8:00).
 export async function runEmailRemindersController(_req: Request, res: Response) {
-  if (!isMailConfigured()) {
-    throw badRequest("El correo (SMTP) aún no está configurado en el servidor.");
-  }
-  const result = await runEmailPaymentReminders();
-  res.json(result);
+  res.json(await runDailyReminders("manual"));
+}
+
+export async function remindersStatusController(_req: Request, res: Response) {
+  res.json({ ultimaEjecucion: await ultimaEjecucion(), correoConfigurado: isMailConfigured() });
 }
 
 // --- Webhook entrante de YCloud (publico, sin auth de sesion) ---

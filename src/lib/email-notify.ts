@@ -4,6 +4,7 @@ import path from "node:path";
 import { sendBrandedMail, type MailAttachment } from "./mailer.js";
 import { UPLOAD_ROOT } from "./storage.js";
 import { paidByCharge } from "../modules/charges/charges.service.js";
+import { diasHasta, fmtVencimiento } from "./fecha-gt.js";
 
 function fmtMoney(n: number): string {
   return `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -233,13 +234,8 @@ export async function searchEmailRecipients(search: string) {
 
 // --- 3. Recordatorios de cuotas por correo (programado a diario) -------------
 
-// Días hasta el vencimiento (positivo = falta; negativo = ya venció).
-export function daysUntil(due: Date): number {
-  const today = new Date();
-  const a = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
-  const b = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate());
-  return Math.round((b - a) / 86400000);
-}
+// Días hasta el vencimiento en hora de Guatemala (positivo = falta; negativo = ya venció).
+export const daysUntil = diasHasta;
 
 // 5 días antes y el día del vencimiento -> "por vencer"; 3 y 7 días después -> "mora".
 export function reminderKind(offset: number): "por_vencer" | "mora" | null {
@@ -294,12 +290,12 @@ export async function runEmailPaymentReminders(): Promise<{
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin:14px 0;">
         <p style="margin:0 0 4px;"><strong>Concepto:</strong> ${escapeHtml(c.concept)}</p>
         <p style="margin:0 0 4px;"><strong>Saldo:</strong> ${fmtMoney(saldo)}</p>
-        <p style="margin:0;"><strong>Vence:</strong> ${fmtDate(c.dueDate)}</p>
+        <p style="margin:0;"><strong>Vence:</strong> ${fmtVencimiento(c.dueDate)}</p>
       </div>
       <p style="color:#6b7280;font-size:13px;">Si ya realizaste el pago, ignora este mensaje.</p>`;
     const text =
       `Hola, ${firstName(c.student.fullName)}:\n\n${intro}\n` +
-      `Concepto: ${c.concept}\nSaldo: ${fmtMoney(saldo)}\nVence: ${fmtDate(c.dueDate)}\n\n` +
+      `Concepto: ${c.concept}\nSaldo: ${fmtMoney(saldo)}\nVence: ${fmtVencimiento(c.dueDate)}\n\n` +
       `Si ya pagaste, ignora este mensaje.`;
     const r = await sendBrandedMail({
       to: c.student.email,

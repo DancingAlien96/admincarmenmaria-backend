@@ -13,6 +13,7 @@ import type {
   UpdatePlanItemInput,
   PropagatePlanItemInput,
 } from "./charges.schemas.js";
+import { estaVencida, hoyGT } from "../../lib/fecha-gt.js";
 
 // Suma neta (monto - descuento) de pagos ACTIVOS por cargo
 export async function paidByCharge(
@@ -46,7 +47,7 @@ function decorate(charge: ChargeRow, paid: number, now: Date) {
   const amount = Number(charge.amount);
   const saldo = Math.max(0, amount - paid);
   const overdue =
-    charge.status === "PENDIENTE" && saldo > 0 && charge.dueDate < now;
+    charge.status === "PENDIENTE" && saldo > 0 && estaVencida(charge.dueDate, now);
   return {
     ...charge,
     amount,
@@ -62,7 +63,7 @@ export async function listCharges(q: ListChargesQuery) {
     ...(q.studentId ? { studentId: q.studentId } : {}),
     ...(q.status ? { status: q.status } : {}),
     ...(q.overdue === true
-      ? { status: "PENDIENTE", dueDate: { lt: now } }
+      ? { status: "PENDIENTE", dueDate: { lt: hoyGT(now) } }
       : {}),
   };
 
@@ -242,10 +243,8 @@ function propagateWhere(
   };
 }
 
-function startOfTodayUTC() {
-  const n = new Date();
-  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
-}
+// Hoy (calendario de Guatemala) como medianoche UTC, igual que dueDate.
+const startOfTodayUTC = () => hoyGT();
 
 // Vista previa: cuántas cuotas asignadas dependen de este item del plan,
 // desglosadas por promoción (año de inscripción) y por situación.

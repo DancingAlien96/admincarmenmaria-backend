@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma.js";
 import { paidByCharge } from "../charges/charges.service.js";
 import type { DashboardQuery } from "./dashboard.schemas.js";
+import { hoyGT } from "../../lib/fecha-gt.js";
 
 // Calcula KPIs de cobranza: ingreso esperado, mora y estudiantes al dia/en mora.
 async function getMora(from: Date, to: Date) {
@@ -17,7 +18,7 @@ async function getMora(from: Date, to: Date) {
   const overdueCharges = await prisma.charge.findMany({
     where: {
       status: "PENDIENTE",
-      dueDate: { lt: now },
+      dueDate: { lt: hoyGT(now) },
       student: { status: { notIn: ["ASPIRANTE", "NO_ADMITIDO"] } },
     },
     select: { id: true, amount: true, studentId: true },

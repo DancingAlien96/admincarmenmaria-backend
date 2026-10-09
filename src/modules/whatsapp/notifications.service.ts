@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma.js";
 import { sendTemplateAndLog } from "./whatsapp.service.js";
 import { paidByCharge } from "../charges/charges.service.js";
+import { diasHasta, fmtVencimiento } from "../../lib/fecha-gt.js";
 
 // Idioma de las plantillas aprobadas en YCloud/Meta.
 const LANG = "es";
@@ -9,22 +10,9 @@ function fmtMoney(n: number): string {
   return n.toFixed(2);
 }
 
-function fmtDate(d: Date): string {
-  return new Intl.DateTimeFormat("es-GT", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(d);
-}
-
-// Dias entre hoy y la fecha de vencimiento (negativo = ya vencio).
-function daysUntil(due: Date): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(due);
-  d.setHours(0, 0, 0, 0);
-  return Math.round((d.getTime() - today.getTime()) / 86_400_000);
-}
+// Fecha de vencimiento en texto y días hasta ella (hora de Guatemala).
+const fmtDate = fmtVencimiento;
+const daysUntil = diasHasta;
 
 // Que plantilla usar segun los dias hasta el vencimiento.
 // 5 dias antes y el dia mismo -> recordatorio_pago; 3 y 7 dias despues -> aviso_mora.
