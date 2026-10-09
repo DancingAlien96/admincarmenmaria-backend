@@ -889,3 +889,20 @@ model StudentMatricula {
   @@unique([studentId, year])
   @@index([status])
 }
+
+// Criterios de la Encuesta de satisfacción, configurables por fase (admin).
+// La calificación del alumno se guarda por `clave` en SurveyResponse.ratings.
+model SurveyCriterion {
+  id        String   @id @default(cuid())
+  fase      Int // 1, 2, 3
+  grupo     String // sección, p. ej. "Instalaciones", "Docentes", "Contenido"
+  clave     String // identificador estable dentro de la fase
+  nombre    String
+  detalle   String?  @db.Text
+  order     Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([fase, clave])
+  @@index([fase, active])
+}

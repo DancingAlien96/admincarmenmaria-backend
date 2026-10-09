@@ -9,6 +9,11 @@ import {
   listQuestions,
   createQuestion,
   deleteQuestion,
+  updateQuestion,
+  listCriteriosAdmin,
+  createCriterio,
+  updateCriterio,
+  deleteCriterio,
   encuestaResumen,
   retoResumen,
 } from "./fase-extras.service.js";
@@ -66,6 +71,18 @@ faseExtrasRouter.post(
   })
 );
 
+faseExtrasRouter.patch(
+  "/quiz/:id",
+  requireAdmin,
+  validate({
+    params: idParam,
+    body: questionSchema.omit({ fase: true }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ pregunta: await updateQuestion(req.params.id, req.body) });
+  })
+);
+
 faseExtrasRouter.delete(
   "/quiz/:id",
   requireAdmin,
@@ -88,5 +105,45 @@ faseExtrasRouter.get(
   validate({ query: faseQuery }),
   asyncHandler(async (req: Request, res: Response) => {
     res.json(await encuestaResumen(Number(req.query.fase)));
+  })
+);
+
+// --- Criterios de la Encuesta de satisfacción (por fase; los crea el admin) ---
+const criterioSchema = z.object({
+  fase: z.coerce.number().int().min(1).max(3),
+  grupo: z.string().trim().min(2, "Escribe la sección").max(60),
+  nombre: z.string().trim().min(2, "Escribe el criterio").max(120),
+  detalle: z.string().trim().max(500).optional().nullable(),
+});
+
+faseExtrasRouter.get(
+  "/encuesta/criterios",
+  validate({ query: faseQuery }),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ criterios: await listCriteriosAdmin(Number(req.query.fase)) });
+  })
+);
+faseExtrasRouter.post(
+  "/encuesta/criterios",
+  requireAdmin,
+  validate({ body: criterioSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.status(201).json({ criterio: await createCriterio(req.body) });
+  })
+);
+faseExtrasRouter.patch(
+  "/encuesta/criterios/:id",
+  requireAdmin,
+  validate({ params: idParam, body: criterioSchema.omit({ fase: true }).partial() }),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ criterio: await updateCriterio(req.params.id, req.body) });
+  })
+);
+faseExtrasRouter.delete(
+  "/encuesta/criterios/:id",
+  requireAdmin,
+  validate({ params: idParam }),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await deleteCriterio(req.params.id));
   })
 );
