@@ -245,6 +245,10 @@ async function aprobarPagoTarjeta(paymentId: string) {
   void import("../../lib/email-notify.js")
     .then((m) => m.sendPaymentReceiptEmail(paymentId))
     .catch((e) => console.error("[email pago tarjeta]", (e as Error).message));
+  // Aviso en el portal + notificación push
+  void import("../avisos/avisos.service.js")
+    .then((m) => m.notificarPagoAplicado(paymentId))
+    .catch((e) => console.error("[aviso pago]", (e as Error).message));
 }
 
 // Aplica un pago confirmado por Recurrente. Si el monto no coincide con el
@@ -352,6 +356,10 @@ export async function confirmCardPayment(
     void import("../../lib/email-notify.js")
       .then((m) => m.sendPaymentReceiptEmail(pending.id))
       .catch((e) => console.error("[email pago tarjeta]", (e as Error).message));
+    // Aviso en el portal + notificación push
+    void import("../avisos/avisos.service.js")
+      .then((m) => m.notificarPagoAplicado(pending.id))
+      .catch((e) => console.error("[aviso pago]", (e as Error).message));
     return { status: "aprobado" as const };
   }
 
@@ -666,9 +674,10 @@ export async function getMeForUser(userId: string) {
     },
   });
   if (!s) throw notFound("Expediente no encontrado");
-  const [{ fases }, notifs] = await Promise.all([
+  const [{ fases }, notifs, avisosNoLeidos] = await Promise.all([
     getStudentFases(studentId),
     getNotificacionesForUser(userId),
+    prisma.avisoDestinatario.count({ where: { userId, readAt: null } }),
   ]);
   // Fase en curso: la primera que no está completada
   const idx = fases.findIndex((f) => f.estado !== "completado");
@@ -683,7 +692,7 @@ export async function getMeForUser(userId: string) {
       total: fases.length,
       completadas,
     },
-    notifCount: notifs.total,
+    notifCount: notifs.total + avisosNoLeidos,
   };
 }
 

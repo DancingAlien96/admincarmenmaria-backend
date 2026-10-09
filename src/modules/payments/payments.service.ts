@@ -192,6 +192,10 @@ export async function createManualPayment(
     void import("../../lib/email-notify.js")
       .then((m) => m.sendPaymentReceiptEmail(payment.id))
       .catch((e) => console.error("[email pago]", (e as Error).message));
+    // Aviso en el portal + notificación push
+    void import("../avisos/avisos.service.js")
+      .then((m) => m.notificarPagoAplicado(payment.id))
+      .catch((e) => console.error("[aviso pago]", (e as Error).message));
   }
 
   return serialize(payment);
@@ -269,6 +273,10 @@ export async function approvePayment(id: string, userId?: string) {
   void import("../../lib/email-notify.js")
     .then((m) => m.sendPaymentReceiptEmail(updated.id))
     .catch((e) => console.error("[email boleta aprobada]", (e as Error).message));
+  // Aviso en el portal + notificación push
+  void import("../avisos/avisos.service.js")
+    .then((m) => m.notificarPagoAplicado(updated.id))
+    .catch((e) => console.error("[aviso pago]", (e as Error).message));
   return serialize(updated);
 }
 
@@ -293,6 +301,16 @@ export async function rejectPayment(
     },
     include,
   });
+  void import("../avisos/avisos.service.js")
+    .then((m) =>
+      m.notificarAlumno(payment.studentId, {
+        tipo: "pago",
+        titulo: "Comprobante rechazado",
+        mensaje: `${payment.concept}${reason ? ` · Motivo: ${reason}` : ""}. Revisa y vuelve a enviarlo.`,
+        url: "/portal/pagos/",
+      })
+    )
+    .catch((e) => console.error("[aviso boleta]", (e as Error).message));
   return serialize(updated);
 }
 

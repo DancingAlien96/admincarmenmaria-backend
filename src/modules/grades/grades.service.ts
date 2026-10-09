@@ -71,7 +71,7 @@ export async function createGrade(input: CreateGradeInput, userId?: string) {
       throw badRequest("La actividad no pertenece a esa fase");
     }
   }
-  return prisma.grade.create({
+  const grade = await prisma.grade.create({
     data: {
       studentId: input.studentId,
       fase: input.fase,
@@ -84,6 +84,17 @@ export async function createGrade(input: CreateGradeInput, userId?: string) {
       createdById: userId,
     },
   });
+  void import("../avisos/avisos.service.js")
+    .then((m) =>
+      m.notificarAlumno(input.studentId, {
+        tipo: "calificacion",
+        titulo: "Nueva calificación",
+        mensaje: `Fase ${input.fase} · ${input.name}: ${input.score}/${maxScore}`,
+        url: "/portal/fases/",
+      })
+    )
+    .catch((e) => console.error("[aviso nota]", (e as Error).message));
+  return grade;
 }
 
 export async function deleteGrade(id: string) {

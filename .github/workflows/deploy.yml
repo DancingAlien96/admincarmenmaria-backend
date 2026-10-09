@@ -53,6 +53,8 @@ jobs:
             upsert_env TILOPAY_API_PASSWORD "${{ secrets.TILOPAY_API_PASSWORD }}"
             upsert_env RECURRENTE_SECRET_KEY "${{ secrets.RECURRENTE_SECRET_KEY }}"
             upsert_env RECURRENTE_WEBHOOK_SECRET "${{ secrets.RECURRENTE_WEBHOOK_SECRET }}"
+            upsert_env VAPID_PUBLIC_KEY "${{ secrets.VAPID_PUBLIC_KEY }}"
+            upsert_env VAPID_PRIVATE_KEY "${{ secrets.VAPID_PRIVATE_KEY }}"
             echo "→ Construyendo imagen Docker..."
             docker compose -f docker-compose.prod.yml build
             echo "→ Levantando servicios (mysql + backend)..."

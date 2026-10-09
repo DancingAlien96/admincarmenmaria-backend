@@ -48,6 +48,9 @@ const envSchema = z.object({
   RECURRENTE_BASE_URL: z.string().default("https://app.recurrente.com/api"),
   RECURRENTE_SECRET_KEY: z.string().optional(),
   RECURRENTE_WEBHOOK_SECRET: z.string().optional(),
+  // Notificaciones push (PWA). Llaves VAPID: npx web-push generate-vapid-keys
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

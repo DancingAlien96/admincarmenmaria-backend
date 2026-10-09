@@ -61,6 +61,8 @@ services:
       TILOPAY_API_PASSWORD: ${TILOPAY_API_PASSWORD}
       RECURRENTE_SECRET_KEY: ${RECURRENTE_SECRET_KEY}
       RECURRENTE_WEBHOOK_SECRET: ${RECURRENTE_WEBHOOK_SECRET}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
     # Los archivos subidos persisten en un volumen, fuera del contenedor.
     volumes:
       - uploads_data:/app/uploads

@@ -154,6 +154,19 @@ export async function reviewMatricula(
       reviewedById: userId ?? null,
     },
   });
+  const aprobada = input.status === "APROBADA";
+  void import("../avisos/avisos.service.js")
+    .then((mod) =>
+      mod.notificarAlumno(m.studentId, {
+        tipo: "matricula",
+        titulo: aprobada ? `Matrícula ${m.year} aprobada` : `Matrícula ${m.year} rechazada`,
+        mensaje: aprobada
+          ? "La administración aprobó tu matrícula."
+          : `Motivo: ${input.note?.trim()}. Corrígela y vuelve a subirla.`,
+        url: "/portal/matricula/",
+      })
+    )
+    .catch((e) => console.error("[aviso matrícula]", (e as Error).message));
   return serialize(saved);
 }
 

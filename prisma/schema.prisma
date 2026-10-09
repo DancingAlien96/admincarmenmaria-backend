@@ -64,6 +64,9 @@ model User {
   createdEbooks      Ebook[]                @relation("EbookCreatedBy")
   createdGrades      Grade[]                @relation("GradeCreatedBy")
   createdFaseItems   FaseItem[]             @relation("FaseItemCreatedBy")
+  pushSubscriptions  PushSubscription[]
+  avisosRecibidos    AvisoDestinatario[]
+  avisosCreados      Aviso[]                @relation("AvisoCreatedBy")
 
   @@index([email])
 }
@@ -905,4 +908,61 @@ model SurveyCriterion {
 
   @@unique([fase, clave])
   @@index([fase, active])
+}
+
+// ----------------------------------------------------------------------------
+// Notificaciones push (PWA) y avisos
+// ----------------------------------------------------------------------------
+
+// Navegador/celular suscrito a notificaciones push de un usuario.
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String   @unique @db.VarChar(700)
+  p256dh     String   @db.VarChar(200)
+  auth       String   @db.VarChar(100)
+  userAgent  String?  @db.VarChar(300)
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Aviso enviado a usuarios: manual (desde el panel) o automático
+// (pago, matrícula, documento, calificación). Se ve en el portal y llega por push.
+model Aviso {
+  id              String   @id @default(cuid())
+  // general (manual) | pago | matricula | documento | calificacion
+  tipo            String   @default("general") @db.VarChar(30)
+  titulo          String   @db.VarChar(150)
+  mensaje         String   @db.Text
+  url             String?  @db.VarChar(300)
+  // Resumen del envío (solo avisos manuales)
+  destino         String?  @db.VarChar(200)
+  canales         String?  @db.VarChar(60)
+  pushEnviados    Int      @default(0)
+  correosEnviados Int      @default(0)
+  createdById     String?
+  createdAt       DateTime @default(now())
+
+  createdBy     User?               @relation("AvisoCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  destinatarios AvisoDestinatario[]
+
+  @@index([tipo, createdAt])
+}
+
+model AvisoDestinatario {
+  id        String    @id @default(cuid())
+  avisoId   String
+  userId    String
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  aviso Aviso @relation(fields: [avisoId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([avisoId, userId])
+  @@index([userId, readAt])
 }

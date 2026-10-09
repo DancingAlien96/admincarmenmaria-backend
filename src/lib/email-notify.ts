@@ -234,7 +234,7 @@ export async function searchEmailRecipients(search: string) {
 // --- 3. Recordatorios de cuotas por correo (programado a diario) -------------
 
 // Días hasta el vencimiento (positivo = falta; negativo = ya venció).
-function daysUntil(due: Date): number {
+export function daysUntil(due: Date): number {
   const today = new Date();
   const a = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
   const b = Date.UTC(due.getFullYear(), due.getMonth(), due.getDate());
@@ -242,7 +242,7 @@ function daysUntil(due: Date): number {
 }
 
 // 5 días antes y el día del vencimiento -> "por vencer"; 3 y 7 días después -> "mora".
-function reminderKind(offset: number): "por_vencer" | "mora" | null {
+export function reminderKind(offset: number): "por_vencer" | "mora" | null {
   if (offset === 5 || offset === 0) return "por_vencer";
   if (offset === -3 || offset === -7) return "mora";
   return null;

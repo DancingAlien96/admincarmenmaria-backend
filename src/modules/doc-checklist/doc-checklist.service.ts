@@ -128,5 +128,18 @@ export async function setStudentDocStatus(
       updatedById: userId,
     },
   });
+  // Recién marcado como recibido: avisa al alumno
+  if (input.delivered && !existing?.delivered) {
+    void import("../avisos/avisos.service.js")
+      .then((m) =>
+        m.notificarAlumno(studentId, {
+          tipo: "documento",
+          titulo: "Documento recibido",
+          mensaje: `La escuela recibió y aprobó: ${req.name}.`,
+          url: "/portal/documentos/",
+        })
+      )
+      .catch((e) => console.error("[aviso documento]", (e as Error).message));
+  }
   return getStudentChecklist(studentId);
 }

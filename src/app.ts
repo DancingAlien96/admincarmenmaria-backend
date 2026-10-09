@@ -35,6 +35,8 @@ import { docenteRouter } from "./modules/docente/docente.routes.js";
 import { faseContentRouter } from "./modules/fase-content/fase-content.routes.js";
 import { faseExtrasRouter } from "./modules/fase-extras/fase-extras.routes.js";
 import { matriculaRouter } from "./modules/matricula/matricula.routes.js";
+import { isPushConfigured } from "./lib/push.js";
+import { pushRouter, avisosRouter } from "./modules/avisos/avisos.routes.js";
 
 export function createApp() {
   const app = express();
@@ -75,6 +77,7 @@ export function createApp() {
       service: "carmenmaria-backend",
       mailConfigured: isMailConfigured(),
       cardEnabled: isRecurrenteConfigured() || isTilopayConfigured(),
+      pushEnabled: isPushConfigured(),
       cardProvider: isRecurrenteConfigured() ? "recurrente" : isTilopayConfigured() ? "tilopay" : null,
     });
   });
@@ -108,6 +111,8 @@ export function createApp() {
   app.use("/api/fase-content", faseContentRouter);
   app.use("/api/fase-extras", faseExtrasRouter);
   app.use("/api/matricula", matriculaRouter);
+  app.use("/api/push", pushRouter);
+  app.use("/api/avisos", avisosRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);
