@@ -67,6 +67,7 @@ model User {
   pushSubscriptions  PushSubscription[]
   avisosRecibidos    AvisoDestinatario[]
   avisosCreados      Aviso[]                @relation("AvisoCreatedBy")
+  asistenteMensajes  AsistenteMensaje[]
 
   @@index([email])
 }
@@ -703,6 +704,9 @@ model BotConfig {
   enabled       Boolean  @default(true) // responder con IA automaticamente
   knowledgeBase String   @db.Text // info de la academia para la IA
   systemPrompt  String?  @db.Text // instrucciones extra opcionales
+  // Asistente de IA en el portal del estudiante
+  portalEnabled Boolean  @default(true)
+  dailyLimit    Int      @default(30) // preguntas por alumno cada 24 h
   updatedAt     DateTime @updatedAt
 }
 
@@ -965,4 +969,19 @@ model AvisoDestinatario {
 
   @@unique([avisoId, userId])
   @@index([userId, readAt])
+}
+
+// Conversación del alumno con el asistente de IA del portal.
+model AsistenteMensaje {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String   @db.VarChar(10) // user | assistant
+  content   String   @db.Text
+  // Borrado por el alumno ("nueva conversación"): no se usa como contexto
+  oculto    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

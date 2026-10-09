@@ -25,6 +25,8 @@ export async function updateBotConfig(data: {
   enabled?: boolean;
   knowledgeBase?: string;
   systemPrompt?: string | null;
+  portalEnabled?: boolean;
+  dailyLimit?: number;
 }) {
   await getBotConfig(); // asegura que exista
   return prisma.botConfig.update({ where: { id: 1 }, data });

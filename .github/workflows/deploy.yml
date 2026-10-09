@@ -55,6 +55,8 @@ jobs:
             upsert_env RECURRENTE_WEBHOOK_SECRET "${{ secrets.RECURRENTE_WEBHOOK_SECRET }}"
             upsert_env VAPID_PUBLIC_KEY "${{ secrets.VAPID_PUBLIC_KEY }}"
             upsert_env VAPID_PRIVATE_KEY "${{ secrets.VAPID_PRIVATE_KEY }}"
+            upsert_env OPENAI_API_KEY "${{ secrets.OPENAI_API_KEY }}"
+            upsert_env OPENAI_MODEL "${{ secrets.OPENAI_MODEL }}"
             echo "→ Construyendo imagen Docker..."
             docker compose -f docker-compose.prod.yml build
             echo "→ Levantando servicios (mysql + backend)..."

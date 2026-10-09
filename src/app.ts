@@ -37,6 +37,8 @@ import { faseExtrasRouter } from "./modules/fase-extras/fase-extras.routes.js";
 import { matriculaRouter } from "./modules/matricula/matricula.routes.js";
 import { isPushConfigured } from "./lib/push.js";
 import { pushRouter, avisosRouter } from "./modules/avisos/avisos.routes.js";
+import { asistenteRouter } from "./modules/asistente/asistente.routes.js";
+import { isOpenAiConfigured } from "./lib/openai.js";
 
 export function createApp() {
   const app = express();
@@ -78,6 +80,7 @@ export function createApp() {
       mailConfigured: isMailConfigured(),
       cardEnabled: isRecurrenteConfigured() || isTilopayConfigured(),
       pushEnabled: isPushConfigured(),
+      aiEnabled: isOpenAiConfigured(),
       cardProvider: isRecurrenteConfigured() ? "recurrente" : isTilopayConfigured() ? "tilopay" : null,
     });
   });
@@ -113,6 +116,7 @@ export function createApp() {
   app.use("/api/matricula", matriculaRouter);
   app.use("/api/push", pushRouter);
   app.use("/api/avisos", avisosRouter);
+  app.use("/api/asistente", asistenteRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);

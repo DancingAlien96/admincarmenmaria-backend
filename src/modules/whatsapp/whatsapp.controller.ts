@@ -176,9 +176,19 @@ export async function getConfigController(_req: Request, res: Response) {
 }
 
 export async function updateConfigController(req: Request, res: Response) {
-  const { enabled, knowledgeBase, systemPrompt } = req.body ?? {};
+  const { enabled, knowledgeBase, systemPrompt, portalEnabled, dailyLimit } = req.body ?? {};
+  const limit = dailyLimit === undefined ? undefined : Number(dailyLimit);
+  if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 500)) {
+    throw badRequest("El límite diario debe ser un número entre 1 y 500");
+  }
   res.json({
-    config: await service.updateBotConfig({ enabled, knowledgeBase, systemPrompt }),
+    config: await service.updateBotConfig({
+      enabled: typeof enabled === "boolean" ? enabled : undefined,
+      knowledgeBase: typeof knowledgeBase === "string" ? knowledgeBase : undefined,
+      systemPrompt: typeof systemPrompt === "string" || systemPrompt === null ? systemPrompt : undefined,
+      portalEnabled: typeof portalEnabled === "boolean" ? portalEnabled : undefined,
+      dailyLimit: limit,
+    }),
   });
 }
 

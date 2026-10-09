@@ -76,3 +76,41 @@ export async function generateBotReply(input: ReplyInput): Promise<string> {
     "Disculpa, no pude procesar tu consulta en este momento."
   );
 }
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+// Llamada genérica a Chat Completions (asistente del portal).
+export async function chatCompletion(
+  messages: ChatMessage[],
+  opts: { maxTokens?: number; temperature?: number } = {}
+): Promise<string> {
+  if (!env.OPENAI_API_KEY) {
+    throw new Error("OpenAI no configurado (falta API key)");
+  }
+  const res = await fetch(OPENAI_API, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: env.OPENAI_MODEL,
+      messages,
+      temperature: opts.temperature ?? 0.3,
+      max_tokens: opts.maxTokens ?? 500,
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    choices?: { message?: { content?: string } }[];
+    error?: { message?: string };
+  };
+  if (!res.ok) {
+    console.error("[openai] error", res.status, data.error?.message);
+    throw new Error(data.error?.message ?? `OpenAI respondio ${res.status}`);
+  }
+  return data.choices?.[0]?.message?.content?.trim() ?? "";
+}
