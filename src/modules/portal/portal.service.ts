@@ -20,6 +20,11 @@ import {
 import { env } from "../../config/env.js";
 import { REVIEWABLE_PAYMENT, TILOPAY_VERIFY_NOTE } from "../../lib/payment-review.js";
 import {
+  isRecurrenteConfigured,
+  createCheckout as createRecurrenteCheckout,
+  getCheckout as getRecurrenteCheckout,
+} from "../../lib/recurrente.js";
+import {
   createCheckout,
   isTilopayConfigured,
   isApproved,
@@ -81,7 +86,7 @@ export async function getCuotasForUser(userId: string) {
     cuotas,
     summary,
     progress: { pagadas, total: cuotas.length },
-    cardEnabled: isTilopayConfigured(),
+    cardEnabled: isRecurrenteConfigured() || isTilopayConfigured(),
   };
 }
 
@@ -126,11 +131,12 @@ export async function submitBoleta(
   return { ok: true };
 }
 
-// El alumno inicia un pago con tarjeta (checkout hospedado de Tilopay).
-// Devuelve la URL a la que se debe redirigir para ingresar la tarjeta.
+// El alumno inicia un pago con tarjeta (checkout hospedado). Se usa Recurrente
+// si está configurada; si no, Tilopay. Devuelve la URL de la pasarela.
 export async function startCardPayment(userId: string, chargeId: string) {
   const studentId = await requireStudentId(userId);
-  if (!isTilopayConfigured()) {
+  const usarRecurrente = isRecurrenteConfigured();
+  if (!usarRecurrente && !isTilopayConfigured()) {
     throw badRequest("El pago con tarjeta no está disponible por el momento.");
   }
   const student = await prisma.student.findUnique({ where: { id: studentId } });
@@ -139,7 +145,8 @@ export async function startCardPayment(userId: string, chargeId: string) {
     throw notFound("Cuota no encontrada");
   }
   if (charge.status === "PAGADO") throw badRequest("Esta cuota ya está pagada");
-  if (!student.email) {
+  // Tilopay exige el correo; Recurrente lo pide en su propio formulario
+  if (!usarRecurrente && !student.email) {
     throw badRequest("Necesitas un correo en tu expediente para pagar con tarjeta.");
   }
 
@@ -153,7 +160,7 @@ export async function startCardPayment(userId: string, chargeId: string) {
   });
 
   const orderNumber = `${chargeId}-${Date.now().toString(36)}`;
-  await prisma.payment.create({
+  const intento = await prisma.payment.create({
     data: {
       studentId,
       chargeId,
@@ -168,6 +175,32 @@ export async function startCardPayment(userId: string, chargeId: string) {
     },
   });
 
+  if (usarRecurrente) {
+    try {
+      const co = await createRecurrenteCheckout({
+        name: `${charge.concept} · ${student.fullName}`,
+        amount,
+        // Al volver, la pantalla de retorno consulta el estado del pago
+        successUrl: `${env.FRONTEND_URL}/portal/pagos/retorno?proveedor=recurrente&ref=${intento.id}`,
+        cancelUrl: `${env.FRONTEND_URL}/portal/pagos?cancelado=1`,
+        metadata: { paymentId: intento.id, chargeId, studentId },
+      });
+      // El id del checkout (ch_...) identifica el pago en el webhook
+      await prisma.payment.update({ where: { id: intento.id }, data: { orderRef: co.id } });
+      return { url: co.url };
+    } catch (err) {
+      await prisma.payment.delete({ where: { id: intento.id } }).catch(() => undefined);
+      console.error(
+        `[recurrente] no se pudo iniciar el pago de la cuota ${chargeId}:`,
+        (err as Error).message
+      );
+      throw new HttpError(
+        502,
+        "El pago con tarjeta no está disponible en este momento. Puedes pagar por transferencia subiendo tu boleta, o intentarlo más tarde."
+      );
+    }
+  }
+
   const [firstName, ...rest] = student.fullName.trim().split(/\s+/);
   try {
     const url = await createCheckout({
@@ -176,7 +209,7 @@ export async function startCardPayment(userId: string, chargeId: string) {
       redirect: `${env.FRONTEND_URL}/portal/pagos/retorno`,
       firstName: firstName ?? "Estudiante",
       lastName: rest.join(" ") || "-",
-      email: student.email,
+      email: student.email ?? "",
       phone: student.phonePrimary ?? undefined,
       address: student.address ?? undefined,
       city: student.municipality ?? undefined,
@@ -195,6 +228,82 @@ export async function startCardPayment(userId: string, chargeId: string) {
       502,
       "El pago con tarjeta no está disponible en este momento. Puedes pagar por transferencia subiendo tu boleta, o intentarlo más tarde."
     );
+  }
+}
+
+// --- Recurrente: aprobación por webhook y por consulta al volver -----------
+
+// Marca un intento de pago con tarjeta como aprobado (idempotente) y avisa.
+async function aprobarPagoTarjeta(paymentId: string) {
+  const p = await prisma.payment.findUnique({ where: { id: paymentId } });
+  if (!p || p.status === "ACTIVO") return;
+  await prisma.payment.update({
+    where: { id: paymentId },
+    data: { status: "ACTIVO", paidAt: new Date() },
+  });
+  if (p.chargeId) await recomputeChargeStatus(p.chargeId);
+  void import("../../lib/email-notify.js")
+    .then((m) => m.sendPaymentReceiptEmail(paymentId))
+    .catch((e) => console.error("[email pago tarjeta]", (e as Error).message));
+}
+
+// Aplica un pago confirmado por Recurrente. Si el monto no coincide con el
+// de la cuota, NO se aprueba solo: queda en revisión para el personal.
+export async function aplicarPagoRecurrente(input: {
+  checkoutId?: string | null;
+  paymentId?: string | null;
+  amountInCents?: number | null;
+  intentId?: string | null;
+}) {
+  let p = input.checkoutId
+    ? await prisma.payment.findFirst({ where: { orderRef: input.checkoutId, method: "TARJETA" } })
+    : null;
+  if (!p && input.paymentId) {
+    p = await prisma.payment.findUnique({ where: { id: input.paymentId } });
+  }
+  if (!p) {
+    console.error("[recurrente] pago confirmado sin intento registrado:", JSON.stringify(input));
+    return { status: "no_encontrado" as const };
+  }
+  if (p.status === "ACTIVO") return { status: "aprobado" as const };
+  const esperado = Math.round(Number(p.amount) * 100);
+  if (input.amountInCents != null && input.amountInCents !== esperado) {
+    await prisma.payment.update({
+      where: { id: p.id },
+      data: {
+        concept: `${p.concept} (tarjeta · verificar en Recurrente · cobrado Q${(input.amountInCents / 100).toFixed(2)} · ${input.intentId ?? ""})`,
+      },
+    });
+    console.error(`[recurrente] monto distinto en ${p.id}: esperado ${esperado}, cobrado ${input.amountInCents}`);
+    return { status: "revision" as const };
+  }
+  await aprobarPagoTarjeta(p.id);
+  return { status: "aprobado" as const };
+}
+
+// Al volver de Recurrente: se consulta el estado real del checkout (no se
+// confía en la URL). El webhook también lo confirma por su lado.
+export async function confirmRecurrentePayment(userId: string, ref: string) {
+  const studentId = await requireStudentId(userId);
+  const p = await prisma.payment.findUnique({ where: { id: ref } });
+  if (!p || p.studentId !== studentId || p.method !== "TARJETA") {
+    return { status: "no_encontrado" as const };
+  }
+  if (p.status === "ACTIVO") return { status: "aprobado" as const };
+  if (!p.orderRef?.startsWith("ch_")) return { status: "no_encontrado" as const };
+  try {
+    const co = await getRecurrenteCheckout(p.orderRef);
+    if (co.status === "paid") {
+      return aplicarPagoRecurrente({
+        checkoutId: co.id,
+        amountInCents: co.total_in_cents ?? null,
+      });
+    }
+    if (co.status === "expired") return { status: "rechazado" as const };
+    // unpaid / payment_in_progress: el webhook lo confirmará
+    return { status: "revision" as const };
+  } catch {
+    return { status: "error" as const };
   }
 }
 

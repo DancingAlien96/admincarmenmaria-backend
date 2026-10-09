@@ -21,6 +21,7 @@ import {
   rateEncuestaForUser,
   getMatriculaForUser,
   submitMatriculaForUser,
+  confirmRecurrentePayment,
 } from "./portal.service.js";
 import { generateReceiptPDF, receiptFileName } from "../../lib/receipt-pdf.js";
 
@@ -186,6 +187,14 @@ portalRouter.post(
         orderHash: String(b.orderHash ?? ""),
       })
     );
+  })
+);
+
+// Al volver de Recurrente: consulta el estado real del pago
+portalRouter.post(
+  "/pagos/confirmar-recurrente",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json(await confirmRecurrentePayment(req.user!.id, String(req.body?.ref ?? "")));
   })
 );
 

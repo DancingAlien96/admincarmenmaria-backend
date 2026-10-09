@@ -4,6 +4,8 @@ import cookieParser from "cookie-parser";
 import { env } from "./config/env.js";
 import { isMailConfigured } from "./lib/mailer.js";
 import { isTilopayConfigured } from "./lib/tilopay.js";
+import { isRecurrenteConfigured } from "./lib/recurrente.js";
+import { recurrenteWebhookRouter } from "./modules/portal/recurrente-webhook.routes.js";
 import { UPLOAD_ROOT, ensureUploadDir } from "./lib/storage.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
 import { uploadsRouter } from "./modules/uploads/uploads.routes.js";
@@ -72,7 +74,8 @@ export function createApp() {
       status: "ok",
       service: "carmenmaria-backend",
       mailConfigured: isMailConfigured(),
-      cardEnabled: isTilopayConfigured(),
+      cardEnabled: isRecurrenteConfigured() || isTilopayConfigured(),
+      cardProvider: isRecurrenteConfigured() ? "recurrente" : isTilopayConfigured() ? "tilopay" : null,
     });
   });
 
@@ -94,6 +97,8 @@ export function createApp() {
   app.use("/api/teachers", teachersRouter);
   app.use("/api/signatories", signatoriesRouter);
   app.use("/api/reports", reportsRouter);
+  // Webhook de Recurrente (público; se valida la firma Svix)
+  app.use("/api/webhooks/recurrente", recurrenteWebhookRouter);
   app.use("/api/portal", portalRouter);
   app.use("/api/portal-invites", invitesRouter);
   app.use("/api/doc-checklist", docChecklistRouter);

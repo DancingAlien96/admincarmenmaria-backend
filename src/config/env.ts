@@ -44,6 +44,10 @@ const envSchema = z.object({
   TILOPAY_API_USER: z.string().optional(),
   TILOPAY_API_PASSWORD: z.string().optional(),
   TILOPAY_CURRENCY: z.string().default("GTQ"),
+  // Pasarela Recurrente (reemplaza a Tilopay cuando está configurada)
+  RECURRENTE_BASE_URL: z.string().default("https://app.recurrente.com/api"),
+  RECURRENTE_SECRET_KEY: z.string().optional(),
+  RECURRENTE_WEBHOOK_SECRET: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
