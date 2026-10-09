@@ -8,6 +8,18 @@ import { sendWelcomeEmail } from "../../lib/mailer.js";
 import { areInscripcionesOpen } from "../../lib/settings.js";
 import { createAdmissionCharges } from "../charges/charges.service.js";
 
+// Código corto para el link (10 caracteres, ~58 bits de azar). Sin 0/O, 1/l/I
+// para que se pueda dictar o copiar a mano sin confusiones.
+const ALFABETO = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+async function codigoCorto(largo = 10): Promise<string> {
+  for (;;) {
+    let code = "";
+    for (let i = 0; i < largo; i++) code += ALFABETO[crypto.randomInt(ALFABETO.length)];
+    const existe = await prisma.portalInvite.findUnique({ where: { token: code } });
+    if (!existe) return code;
+  }
+}
+
 // El admin genera una invitación. Con studentId = activar acceso de un
 // expediente existente; sin studentId = inscripción nueva.
 export async function createInvite(
@@ -19,7 +31,7 @@ export async function createInvite(
   },
   userId?: string
 ) {
-  const token = crypto.randomBytes(24).toString("hex");
+  const token = await codigoCorto();
   return prisma.portalInvite.create({
     data: {
       token,
