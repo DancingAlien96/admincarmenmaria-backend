@@ -12,7 +12,7 @@
 
 import crypto from "node:crypto";
 import { certifyNuc, voidDte, digifactEnvironment } from "../lib/digifact.js";
-import { establishmentForSede, getFelConfig } from "../modules/fel/fel.config.js";
+import { activePhrases, establishmentForSede, getFelConfig } from "../modules/fel/fel.config.js";
 import { buildReciPayload } from "../modules/fel/fel.payload.js";
 import { parseTaxId } from "../lib/nit.js";
 import type { Dte } from "@prisma/client";
@@ -59,7 +59,7 @@ async function main() {
     items: [
       { position: 1, itemType: "S", description: arg("concept", "Examen de admisión")!, quantity: 1, unitOfMeasure: "UNI", unitPrice: amount, discount: 0, total: amount },
     ] as unknown as Prisma.JsonValue,
-    phrases: cfg.phrases as unknown as Prisma.JsonValue,
+    phrases: activePhrases(cfg) as unknown as Prisma.JsonValue,
     currency: "GTQ",
     grandTotal: new Prisma.Decimal(amount),
     authorizationNumber: null,

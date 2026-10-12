@@ -84,7 +84,9 @@ revisar:
    de esa sede lo usen. El marcado como **Predeterminado** se usa cuando la sede
    del pago no coincide con ninguno.
 3. **Frases SAT**: `8 / 2` (exenta del ISR) y `4 / 8` (exenta del IVA). No cambiar
-   salvo indicación del contador.
+   salvo indicación del contador. Cada frase lleva una descripción (el texto que
+   se imprime en el recibo). Tanto las frases como los establecimientos se pueden
+   desactivar sin borrarlos: los inactivos se conservan pero no se usan al emitir.
 4. **Emisión**:
    - *Permitir emitir recibos*: activar.
    - *Emitir al aplicar un pago*: activar cuando se quiera la emisión automática.

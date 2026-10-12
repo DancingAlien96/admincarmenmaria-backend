@@ -40,6 +40,7 @@ const establishmentSchema = z.object({
   municipality: z.string().trim().min(2).max(80),
   department: z.string().trim().min(2).max(80),
   isDefault: z.boolean().default(false),
+  isActive: z.boolean().default(true),
 });
 
 export const felConfigSchema = z.object({
@@ -58,15 +59,26 @@ export const felConfigSchema = z.object({
     .min(1, "Agrega al menos un establecimiento")
     .refine((list) => new Set(list.map((e) => e.code)).size === list.length, {
       message: "Hay códigos de establecimiento repetidos",
+    })
+    .refine((list) => list.some((e) => e.isActive), {
+      message: "Debe quedar al menos un establecimiento activo",
     }),
   phrases: z
     .array(
       z.object({
         phraseType: z.coerce.number().int().min(1).max(99),
         scenarioCode: z.coerce.number().int().min(1).max(99),
+        description: z.string().trim().max(255).nullish(),
+        isActive: z.boolean().default(true),
       })
     )
-    .min(1, "Agrega al menos una frase SAT"),
+    .min(1, "Agrega al menos una frase SAT")
+    .refine((list) => new Set(list.map((p) => `${p.phraseType}-${p.scenarioCode}`)).size === list.length, {
+      message: "Hay frases repetidas (mismo tipo y escenario)",
+    })
+    .refine((list) => list.some((p) => p.isActive), {
+      message: "Debe quedar al menos una frase activa",
+    }),
 });
 
 export const idParam = z.object({ id: z.string().min(1) });

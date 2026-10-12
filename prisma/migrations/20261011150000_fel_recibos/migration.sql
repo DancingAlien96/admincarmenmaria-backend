@@ -79,6 +79,7 @@ CREATE TABLE `DtePhrase` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `phraseType` INTEGER NOT NULL,
     `scenarioCode` INTEGER NOT NULL,
+    `description` VARCHAR(255) NULL,
     `isActive` BOOLEAN NOT NULL DEFAULT true,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
@@ -143,7 +144,7 @@ VALUES (1, '25531395', 'CARMEN ALCIRA , REYES CERÓN DE SARMIENTO', 'ESCUELA PRI
 INSERT INTO `DteEstablishment` (`id`, `code`, `commercialName`, `sede`, `address`, `postalCode`, `municipality`, `department`, `isDefault`, `isActive`, `updatedAt`)
 VALUES (1, '4', 'ESCUELA PRIVADA DE AUXILIARES DE ENFERMERÍA CARMEN MARÍA', 'Chiquimula', '12 AVENIDA 2-61 zona 1, CHIQUIMULA, CHIQUIMULA', '20001', 'CHIQUIMULA', 'CHIQUIMULA', true, true, CURRENT_TIMESTAMP(3));
 
--- 8/2: exenta del ISR (centros educativos privados) · 4/8: exenta del IVA (cuotas de centros educativos)
-INSERT INTO `DtePhrase` (`id`, `phraseType`, `scenarioCode`, `isActive`, `updatedAt`)
-VALUES (1, 8, 2, true, CURRENT_TIMESTAMP(3)),
-       (2, 4, 8, true, CURRENT_TIMESTAMP(3));
+-- Frases de exención de un centro educativo privado
+INSERT INTO `DtePhrase` (`id`, `phraseType`, `scenarioCode`, `description`, `isActive`, `updatedAt`)
+VALUES (1, 8, 2, 'Exenciones generales centros educativos privados. Exenta del ISR (art. 8 núm. 3 Ley de Actualización Tributaria)', true, CURRENT_TIMESTAMP(3)),
+       (2, 4, 8, 'Cuotas centros educativos. Exenta del IVA (art. 8 núm. 1 Ley del IVA)', true, CURRENT_TIMESTAMP(3));

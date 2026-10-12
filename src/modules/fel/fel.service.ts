@@ -21,7 +21,7 @@ import {
   isDigifactConfigured,
 } from "../../lib/digifact.js";
 import { UPLOAD_ROOT, ensureUploadDir, deleteFile } from "../../lib/storage.js";
-import { establishmentForSede, getFelConfig, type FelConfig } from "./fel.config.js";
+import { activePhrases, establishmentForSede, getFelConfig, type FelConfig } from "./fel.config.js";
 import { buildReciPayload, type FelItem } from "./fel.payload.js";
 import type { IssueReceiptInput, ListReceiptsQuery } from "./fel.schemas.js";
 
@@ -232,7 +232,7 @@ export async function issueReceipt(
     receiverEmail: receptor.email,
     receiverAddress: receptor.address,
     items: items as unknown as Prisma.InputJsonValue,
-    phrases: cfg.phrases as unknown as Prisma.InputJsonValue,
+    phrases: activePhrases(cfg) as unknown as Prisma.InputJsonValue,
     currency: "GTQ",
     grandTotal: monto,
     createdById: userId ?? null,

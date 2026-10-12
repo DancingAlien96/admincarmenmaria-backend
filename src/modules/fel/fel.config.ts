@@ -19,11 +19,14 @@ export interface FelEstablishment {
   municipality: string;
   department: string;
   isDefault: boolean; // se usa cuando la sede del pago no coincide con ninguno
+  isActive: boolean; // los inactivos se conservan pero no se usan para emitir
 }
 
 export interface FelPhrase {
   phraseType: number; // TipoFrase (catálogo SAT)
   scenarioCode: number; // CodigoEscenario
+  description?: string | null; // qué significa la frase; se imprime en el recibo
+  isActive?: boolean; // las inactivas se conservan pero no van en el recibo
 }
 
 export interface FelConfig {
@@ -41,7 +44,7 @@ export interface FelConfig {
   phrases: FelPhrase[];
 }
 
-// Texto que SAT imprime para cada frase (tipo, escenario). Se muestra en el PDF.
+// Texto de respaldo por (tipo, escenario) para frases guardadas sin descripción.
 export const PHRASE_TEXTS: Record<string, string> = {
   "1-1": "Sujeto a pagos trimestrales ISR",
   "1-2": "Sujeto a retención definitiva ISR",
@@ -53,23 +56,22 @@ export const PHRASE_TEXTS: Record<string, string> = {
 };
 
 export function phraseText(p: FelPhrase): string {
-  return PHRASE_TEXTS[`${p.phraseType}-${p.scenarioCode}`] ?? `Frase tipo ${p.phraseType}, escenario ${p.scenarioCode}`;
+  return (
+    p.description?.trim() ||
+    PHRASE_TEXTS[`${p.phraseType}-${p.scenarioCode}`] ||
+    `Frase tipo ${p.phraseType}, escenario ${p.scenarioCode}`
+  );
 }
 
 // Las filas iniciales (emisor, establecimiento 4 y frases 8/2 y 4/8) las crea
 // la migración; si faltaran, la emisión queda desactivada y sin emisor.
+// Devuelve también los establecimientos y frases inactivos (para administrarlos).
 export async function getFelConfig(): Promise<FelConfig> {
   const [settings, issuer, establishments, phrases] = await Promise.all([
     prisma.dteSettings.findUnique({ where: { id: 1 } }),
     prisma.dteIssuer.findUnique({ where: { id: 1 } }),
-    prisma.dteEstablishment.findMany({
-      where: { isActive: true },
-      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-    }),
-    prisma.dtePhrase.findMany({
-      where: { isActive: true },
-      orderBy: [{ phraseType: "asc" }, { scenarioCode: "asc" }],
-    }),
+    prisma.dteEstablishment.findMany({ orderBy: [{ isDefault: "desc" }, { id: "asc" }] }),
+    prisma.dtePhrase.findMany({ orderBy: [{ phraseType: "asc" }, { scenarioCode: "asc" }] }),
   ]);
   return {
     enabled: settings?.enabled ?? false,
@@ -92,16 +94,24 @@ export async function getFelConfig(): Promise<FelConfig> {
       municipality: e.municipality,
       department: e.department,
       isDefault: e.isDefault,
+      isActive: e.isActive,
     })),
-    phrases: phrases.map((p) => ({ phraseType: p.phraseType, scenarioCode: p.scenarioCode })),
+    phrases: phrases.map((p) => ({
+      phraseType: p.phraseType,
+      scenarioCode: p.scenarioCode,
+      description: p.description,
+      isActive: p.isActive,
+    })),
   };
 }
 
 // Guarda la configuración completa. Los establecimientos y frases que ya no
-// vienen se desactivan (no se borran: los recibos emitidos los referencian).
+// vienen se eliminan (los recibos emitidos conservan su copia de los datos);
+// para dejar de usarlos sin perderlos se marcan como inactivos.
 export async function setFelConfig(cfg: FelConfig): Promise<FelConfig> {
-  // Exactamente un establecimiento predeterminado: el primero marcado, o el primero.
-  const defaultCode = (cfg.establishments.find((e) => e.isDefault) ?? cfg.establishments[0])?.code;
+  // Exactamente un establecimiento predeterminado, y activo: el marcado, o el primero activo.
+  const activos = cfg.establishments.filter((e) => e.isActive);
+  const defaultCode = (activos.find((e) => e.isDefault) ?? activos[0])?.code;
   const settings = { enabled: cfg.enabled, autoIssue: cfg.autoIssue, sendEmail: cfg.sendEmail };
   const issuer = {
     nit: cfg.issuer.nit,
@@ -114,11 +124,14 @@ export async function setFelConfig(cfg: FelConfig): Promise<FelConfig> {
   const ops: Prisma.PrismaPromise<unknown>[] = [
     prisma.dteSettings.upsert({ where: { id: 1 }, create: { id: 1, ...settings }, update: settings }),
     prisma.dteIssuer.upsert({ where: { id: 1 }, create: { id: 1, ...issuer }, update: issuer }),
-    prisma.dteEstablishment.updateMany({
+    prisma.dteEstablishment.deleteMany({
       where: { code: { notIn: cfg.establishments.map((e) => e.code) } },
-      data: { isActive: false, isDefault: false },
     }),
-    prisma.dtePhrase.updateMany({ data: { isActive: false } }),
+    prisma.dtePhrase.deleteMany({
+      where: {
+        NOT: { OR: cfg.phrases.map((p) => ({ phraseType: p.phraseType, scenarioCode: p.scenarioCode })) },
+      },
+    }),
   ];
   for (const e of cfg.establishments) {
     const data = {
@@ -129,18 +142,20 @@ export async function setFelConfig(cfg: FelConfig): Promise<FelConfig> {
       municipality: e.municipality,
       department: e.department,
       isDefault: e.code === defaultCode,
-      isActive: true,
+      isActive: e.isActive,
     };
     ops.push(
       prisma.dteEstablishment.upsert({ where: { code: e.code }, create: { code: e.code, ...data }, update: data })
     );
   }
   for (const p of cfg.phrases) {
+    const description = p.description?.trim() || null;
+    const isActive = p.isActive ?? true;
     ops.push(
       prisma.dtePhrase.upsert({
         where: { phraseType_scenarioCode: { phraseType: p.phraseType, scenarioCode: p.scenarioCode } },
-        create: { ...p, isActive: true },
-        update: { isActive: true },
+        create: { phraseType: p.phraseType, scenarioCode: p.scenarioCode, description, isActive },
+        update: { description, isActive },
       })
     );
   }
@@ -156,21 +171,29 @@ function normalize(s: string | null | undefined): string {
     .trim();
 }
 
-// Establecimiento para una sede del sistema (Chiquimula / Morales Izabal). Si
-// ninguno coincide se usa el predeterminado.
+// Frases activas, tal como se copian en el recibo.
+export function activePhrases(cfg: FelConfig): FelPhrase[] {
+  return cfg.phrases
+    .filter((p) => p.isActive !== false)
+    .map((p) => ({ phraseType: p.phraseType, scenarioCode: p.scenarioCode, description: p.description ?? null }));
+}
+
+// Establecimiento activo para una sede del sistema (Chiquimula / Morales
+// Izabal). Si ninguno coincide se usa el predeterminado.
 export function establishmentForSede(
   cfg: FelConfig,
   sede: string | null | undefined
 ): FelEstablishment {
+  const activos = cfg.establishments.filter((e) => e.isActive);
   const key = normalize(sede);
   if (key) {
-    const match = cfg.establishments.find((e) => {
+    const match = activos.find((e) => {
       const es = normalize(e.sede);
       return es && (key.includes(es) || es.includes(key));
     });
     if (match) return match;
   }
-  const fallback = cfg.establishments.find((e) => e.isDefault) ?? cfg.establishments[0];
-  if (!fallback) throw new Error("No hay establecimientos FEL configurados");
+  const fallback = activos.find((e) => e.isDefault) ?? activos[0];
+  if (!fallback) throw new Error("No hay establecimientos FEL activos");
   return fallback;
 }

@@ -1099,11 +1099,13 @@ model DteEstablishment {
   @@index([isActive])
 }
 
-// Frases SAT que lleva cada recibo (TipoFrase + CodigoEscenario).
+// Frases SAT que lleva cada recibo (TipoFrase + CodigoEscenario). `description`
+// explica que significa la frase; es el texto que se imprime en el recibo.
 model DtePhrase {
   id           Int      @id @default(autoincrement())
   phraseType   Int
   scenarioCode Int
+  description  String?  @db.VarChar(255)
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
