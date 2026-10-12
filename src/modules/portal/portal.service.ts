@@ -75,7 +75,7 @@ export async function getCuotasForUser(userId: string) {
       // Último pago aprobado con recibo electrónico certificado
       const conFel = [...c.payments]
         .reverse()
-        .find((p) => p.status === "ACTIVO" && p.fel?.estado === "CERTIFICADO");
+        .find((p) => p.status === "ACTIVO" && p.fel?.status === "CERTIFIED");
       return {
         id: c.id,
         concept: c.concept,
@@ -85,7 +85,7 @@ export async function getCuotasForUser(userId: string) {
         dueDate: c.dueDate,
         estado,
         fel: conFel
-          ? { paymentId: conFel.id, serie: conFel.fel!.serie, numero: conFel.fel!.numero }
+          ? { paymentId: conFel.id, series: conFel.fel!.series, number: conFel.fel!.number }
           : null,
       };
     });
@@ -594,11 +594,11 @@ export async function getStudentDashboard(studentId: string) {
       discount: true,
       paidAt: true,
       method: true,
-      felDocumentos: {
-        where: { estado: "CERTIFICADO" },
+      dtes: {
+        where: { status: "CERTIFIED" },
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { id: true, serie: true, numero: true, autorizacion: true },
+        select: { id: true, series: true, number: true, authorizationNumber: true },
       },
     },
   });
@@ -661,17 +661,17 @@ export async function getStudentDashboard(studentId: string) {
       paidAt: p.paidAt,
       method: p.method,
       // Recibo electrónico certificado (para el botón "Descargar recibo FEL")
-      fel: p.felDocumentos[0] ?? null,
+      fel: p.dtes[0] ?? null,
     })),
     grades,
   };
 }
 
 // Recibo FEL certificado de un pago del propio alumno (para el PDF).
-export async function getReciboFelForUser(userId: string, paymentId: string) {
+export async function getFelReceiptForUser(userId: string, paymentId: string) {
   const studentId = await requireStudentId(userId);
-  const doc = await prisma.felDocumento.findFirst({
-    where: { paymentId, estado: "CERTIFICADO", payment: { studentId } },
+  const doc = await prisma.dte.findFirst({
+    where: { paymentId, status: "CERTIFIED", payment: { studentId } },
     orderBy: { createdAt: "desc" },
     include: {
       payment: {

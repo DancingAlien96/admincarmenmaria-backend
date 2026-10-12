@@ -11,12 +11,12 @@ import { fechaIsoGuatemala } from "./fecha-gt.js";
 
 export class DigifactError extends Error {
   status?: number;
-  detalle?: unknown;
-  constructor(message: string, status?: number, detalle?: unknown) {
+  detail?: unknown;
+  constructor(message: string, status?: number, detail?: unknown) {
     super(message);
     this.name = "DigifactError";
     this.status = status;
-    this.detalle = detalle;
+    this.detail = detail;
   }
 }
 
@@ -26,14 +26,14 @@ export function isDigifactConfigured(): boolean {
   );
 }
 
-// "pruebas" si la URL apunta al ambiente de pruebas de Digifact.
-export function digifactAmbiente(): "pruebas" | "produccion" | null {
+// "test" si la URL apunta al ambiente de pruebas de Digifact.
+export function digifactEnvironment(): "test" | "production" | null {
   if (!env.DIGIFACT_API_URL) return null;
-  return /test/i.test(env.DIGIFACT_API_URL) ? "pruebas" : "produccion";
+  return /test/i.test(env.DIGIFACT_API_URL) ? "test" : "production";
 }
 
 const TOKEN_FALLBACK_HOURS = 4;
-const TIMEOUT_MS = 60_000;
+const TIMEOUT_MS = 120_000; // el ambiente de pruebas de Digifact tarda ~1 min en certificar
 
 // Copia en memoria del token (evita una consulta por llamada y permite usar el
 // cliente aunque la tabla aún no exista, p. ej. desde la CLI de prueba).
@@ -142,6 +142,13 @@ function errorDetail(json: JsonRecord | null, text: string): string {
     if (msg && typeof msg === "object") return JSON.stringify(msg);
     return JSON.stringify(json).slice(0, 600);
   }
+  // Respuesta no JSON (p. ej. página HTML de "504 Gateway time-out" del proxy de Digifact)
+  if (/<html|<!doctype/i.test(text)) {
+    const title = text.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim();
+    return title
+      ? `${title}. Digifact no respondió a tiempo; verifica en el panel si el documento quedó certificado antes de reintentar.`
+      : "Digifact devolvió una página de error en lugar de la respuesta";
+  }
   return text.slice(0, 600) || "sin detalle";
 }
 
@@ -170,7 +177,7 @@ async function requestNewToken(): Promise<string> {
     new Date(Date.now() + TOKEN_FALLBACK_HOURS * 3600_000);
   memToken = { token, expiresAt };
   try {
-    await prisma.felToken.upsert({
+    await prisma.digifactAuth.upsert({
       where: { id: 1 },
       create: { id: 1, token, expiresAt },
       update: { token, expiresAt },
@@ -188,7 +195,7 @@ async function getToken(): Promise<string> {
     return memToken.token;
   }
   try {
-    const row = await prisma.felToken.findUnique({ where: { id: 1 } });
+    const row = await prisma.digifactAuth.findUnique({ where: { id: 1 } });
     if (row?.token && (!row.expiresAt || row.expiresAt.getTime() > limit)) {
       memToken = { token: row.token, expiresAt: row.expiresAt };
       return row.token;
@@ -229,16 +236,16 @@ export function padTaxId(nit: string): string {
   return nit.toUpperCase().replace(/[^0-9K]/g, "").padStart(12, "0");
 }
 
-export interface CertificacionResultado {
-  autorizacion: string;
-  serie: string;
-  numero: string;
-  fechaEmision: Date | null;
-  fechaCertificacion: Date | null;
+export interface CertificationResult {
+  authorizationNumber: string;
+  series: string;
+  number: string;
+  emittedAt: Date | null;
+  certifiedAt: Date | null;
   xmlBase64: string | null;
   pdfBase64: string | null;
   // Respuesta sin los archivos en base64 (para guardarla en la BD)
-  respuesta: JsonRecord;
+  response: JsonRecord;
 }
 
 // La respuesta útil puede venir en la raíz o anidada (message / response / RESPONSE[0]).
@@ -260,14 +267,14 @@ function sinBase64(json: JsonRecord): JsonRecord {
   );
 }
 
-export async function certificarNuc(
+export async function certifyNuc(
   payload: unknown,
-  nitEmisor: string
-): Promise<CertificacionResultado> {
+  issuerNit: string
+): Promise<CertificationResult> {
   const res = await digifactRequest("POST", "/v2/transform/nuc_json", {
     body: payload,
     params: {
-      TAXID: padTaxId(nitEmisor),
+      TAXID: padTaxId(issuerNit),
       USERNAME: env.DIGIFACT_USERNAME ?? "",
       FORMAT: "XML|PDF",
     },
@@ -290,8 +297,8 @@ export async function certificarNuc(
   }
 
   const data = extraerDatos(json);
-  const autorizacion = pick(data, ["authNumber", "uuid", "Autorizacion", "authorization_number"]);
-  if (typeof autorizacion !== "string" || !autorizacion) {
+  const authorizationNumber = pick(data, ["authNumber", "uuid", "Autorizacion", "authorization_number"]);
+  if (typeof authorizationNumber !== "string" || !authorizationNumber) {
     throw new DigifactError(
       "Digifact no devolvió el número de autorización",
       res.status,
@@ -299,18 +306,18 @@ export async function certificarNuc(
     );
   }
   const str = (v: unknown) => (v === undefined || v === null ? "" : String(v));
-  const fechaEmision = parseFechaDigifact(pick(data, ["issuedTimeStamp", "fecha", "Fecha_DTE", "date"]));
+  const emittedAt = parseFechaDigifact(pick(data, ["issuedTimeStamp", "fecha", "Fecha_DTE", "date"]));
   return {
-    autorizacion: autorizacion.toUpperCase(),
-    serie: str(pick(data, ["batch", "serie", "series", "Serie"])),
-    numero: str(pick(data, ["serial", "numero", "number", "NUMERO", "Numero"])),
-    fechaEmision,
-    fechaCertificacion:
+    authorizationNumber: authorizationNumber.toUpperCase(),
+    series: str(pick(data, ["batch", "serie", "series", "Serie"])),
+    number: str(pick(data, ["serial", "numero", "number", "NUMERO", "Numero"])),
+    emittedAt,
+    certifiedAt:
       parseFechaDigifact(pick(data, ["enrolledTimeStamp", "Fecha_de_certificacion", "certified_at"])) ??
-      fechaEmision,
+      emittedAt,
     xmlBase64: str(pick(data, ["responseData1", "ResponseDATA1"])) || null,
     pdfBase64: str(pick(data, ["responseData3", "ResponseDATA3"])) || null,
-    respuesta: sinBase64(json),
+    response: sinBase64(json),
   };
 }
 
@@ -322,21 +329,21 @@ function yaCancelado(json: JsonRecord): boolean {
   );
 }
 
-export async function anularDte(input: {
-  nitEmisor: string;
-  autorizacion: string;
-  idReceptor: string;
-  fechaEmision: Date;
-  motivo: string;
-  usuario: string;
+export async function voidDte(input: {
+  issuerNit: string;
+  authorizationNumber: string;
+  receiverTaxId: string;
+  emittedAt: Date;
+  reason: string;
+  username: string;
 }): Promise<JsonRecord> {
   const body = {
-    Taxid: input.nitEmisor,
-    Autorizacion: input.autorizacion,
-    IdReceptor: input.idReceptor,
-    FechaEmisionDocumentoAnular: fechaIsoGuatemala(input.fechaEmision),
-    MotivoAnulacion: input.motivo,
-    Username: input.usuario,
+    Taxid: input.issuerNit,
+    Autorizacion: input.authorizationNumber,
+    IdReceptor: input.receiverTaxId,
+    FechaEmisionDocumentoAnular: fechaIsoGuatemala(input.emittedAt),
+    MotivoAnulacion: input.reason,
+    Username: input.username,
   };
   const res = await digifactRequest("POST", "/CancelFelGT", { body });
   const json: JsonRecord = res.json ?? { raw: res.text };

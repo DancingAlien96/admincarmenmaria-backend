@@ -2,7 +2,7 @@ import { z } from "zod";
 import { parseTaxId } from "../../lib/nit.js";
 
 // NIT / CUI / CF del receptor. Vacío = CF.
-export const receptorIdSchema = z
+export const receiverTaxIdSchema = z
   .string()
   .trim()
   .max(20)
@@ -10,57 +10,69 @@ export const receptorIdSchema = z
     message: "NIT o CUI inválido (revisa el dígito verificador). Usa CF para consumidor final.",
   });
 
-export const emitirReciboSchema = z.object({
-  receptorId: receptorIdSchema.optional(),
-  receptorNombre: z.string().trim().min(2).max(200).optional(),
-  receptorCorreo: z.string().trim().email("Correo inválido").optional().or(z.literal("")),
+export const issueReceiptSchema = z.object({
+  receiverTaxId: receiverTaxIdSchema.optional(),
+  receiverName: z.string().trim().min(2).max(200).optional(),
+  receiverEmail: z.string().trim().email("Correo inválido").optional().or(z.literal("")),
   // Descripción de la línea del recibo (por defecto, el concepto del pago)
-  descripcion: z.string().trim().min(2).max(250).optional(),
+  description: z.string().trim().min(2).max(250).optional(),
 });
 
-export const anularReciboSchema = z.object({
-  motivo: z.string().trim().min(3, "Indica el motivo de la anulación").max(250),
+export const voidReceiptSchema = z.object({
+  reason: z.string().trim().min(3, "Indica el motivo de la anulación").max(250),
 });
 
-export const listRecibosQuery = z.object({
-  estado: z.enum(["PENDIENTE", "CERTIFICADO", "ANULADO", "ERROR"]).optional(),
+export const listReceiptsQuery = z.object({
+  status: z.enum(["PENDING", "CERTIFIED", "VOIDED", "ERROR"]).optional(),
   studentId: z.string().optional(),
   search: z.string().trim().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-const establecimientoSchema = z.object({
-  codigo: z.string().trim().min(1).max(10),
-  nombre: z.string().trim().min(2).max(200),
+const establishmentSchema = z.object({
+  id: z.string().optional(),
+  code: z.string().trim().min(1).max(10),
+  commercialName: z.string().trim().min(2).max(200),
   sede: z.string().trim().max(60).nullable().default(null),
-  direccion: z.string().trim().min(3).max(200),
-  codigoPostal: z.string().trim().min(1).max(10),
-  municipio: z.string().trim().min(2).max(80),
-  departamento: z.string().trim().min(2).max(80),
+  address: z.string().trim().min(3).max(200),
+  postalCode: z.string().trim().min(1).max(10),
+  municipality: z.string().trim().min(2).max(80),
+  department: z.string().trim().min(2).max(80),
+  isDefault: z.boolean().default(false),
 });
 
 export const felConfigSchema = z.object({
-  habilitado: z.boolean(),
-  emitirAutomatico: z.boolean(),
-  enviarCorreo: z.boolean(),
-  emisor: z.object({
+  enabled: z.boolean(),
+  autoIssue: z.boolean(),
+  sendEmail: z.boolean(),
+  issuer: z.object({
     nit: z.string().trim().min(2).max(15),
-    nombre: z.string().trim().min(2).max(200),
-    nombreComercial: z.string().trim().min(2).max(200),
-    afiliacionIva: z.enum(["GEN", "PEQ", "EXE"]),
-    correo: z.string().trim().email().or(z.literal("")),
+    name: z.string().trim().min(2).max(200),
+    commercialName: z.string().trim().min(2).max(200),
+    taxAffiliation: z.enum(["GEN", "PEQ", "EXE"]),
+    email: z.string().trim().email().or(z.literal("")),
   }),
-  establecimientos: z.array(establecimientoSchema).min(1, "Agrega al menos un establecimiento"),
-  frases: z
-    .array(z.object({ tipo: z.coerce.number().int().min(1).max(99), escenario: z.coerce.number().int().min(1).max(99) }))
+  establishments: z
+    .array(establishmentSchema)
+    .min(1, "Agrega al menos un establecimiento")
+    .refine((list) => new Set(list.map((e) => e.code)).size === list.length, {
+      message: "Hay códigos de establecimiento repetidos",
+    }),
+  phrases: z
+    .array(
+      z.object({
+        phraseType: z.coerce.number().int().min(1).max(99),
+        scenarioCode: z.coerce.number().int().min(1).max(99),
+      })
+    )
     .min(1, "Agrega al menos una frase SAT"),
 });
 
 export const idParam = z.object({ id: z.string().min(1) });
 export const paymentIdParam = z.object({ paymentId: z.string().min(1) });
 
-export type EmitirReciboInput = z.infer<typeof emitirReciboSchema>;
-export type AnularReciboInput = z.infer<typeof anularReciboSchema>;
-export type ListRecibosQuery = z.infer<typeof listRecibosQuery>;
+export type IssueReceiptInput = z.infer<typeof issueReceiptSchema>;
+export type VoidReceiptInput = z.infer<typeof voidReceiptSchema>;
+export type ListReceiptsQuery = z.infer<typeof listReceiptsQuery>;
 export type FelConfigInput = z.infer<typeof felConfigSchema>;

@@ -11,7 +11,7 @@
 export async function alAplicarPago(paymentId: string): Promise<void> {
   try {
     const fel = await import("../modules/fel/fel.service.js");
-    await fel.emitirAutomatico(paymentId);
+    await fel.autoIssueReceipt(paymentId);
   } catch (e) {
     console.error("[fel auto]", (e as Error).message);
   }

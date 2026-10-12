@@ -11,7 +11,7 @@ import {
 } from "../../lib/woocommerce.js";
 import { normalizeName } from "../../lib/normalize.js";
 import { nameSimilarity } from "../../lib/similarity.js";
-import { FEL_SELECT, serializeFel, anularReciboDePago } from "../fel/fel.service.js";
+import { FEL_SELECT, serializeFel, voidPaymentReceipt } from "../fel/fel.service.js";
 import { alAplicarPagoEnSegundoPlano } from "../../lib/pago-aplicado.js";
 
 // Completa los datos del expediente (municipio, departamento, dirección, DPI)
@@ -53,16 +53,16 @@ function mapWooMethod(method: string): "TRANSFERENCIA" | "TARJETA" | "DEPOSITO" 
 
 // Convierte Decimal -> number para el frontend. El recibo FEL más reciente
 // (si hay) viaja como `fel`.
-type FelRow = Prisma.FelDocumentoGetPayload<{ select: typeof FEL_SELECT }>;
-type WithDecimals = { amount: unknown; discount: unknown; felDocumentos?: FelRow[] };
+type FelRow = Prisma.DteGetPayload<{ select: typeof FEL_SELECT }>;
+type WithDecimals = { amount: unknown; discount: unknown; dtes?: FelRow[] };
 function serialize<T extends WithDecimals>(p: T) {
-  const { felDocumentos, ...rest } = p;
+  const { dtes, ...rest } = p;
   return {
     ...rest,
     amount: Number(p.amount),
     discount: Number(p.discount),
     net: Number(p.amount) - Number(p.discount),
-    fel: felDocumentos?.[0] ? serializeFel(felDocumentos[0]) : null,
+    fel: dtes?.[0] ? serializeFel(dtes[0]) : null,
   };
 }
 
@@ -71,19 +71,19 @@ const include = {
   feeType: { select: { id: true, name: true, category: true } },
   registeredBy: { select: { name: true } },
   annulledBy: { select: { name: true } },
-  felDocumentos: { orderBy: { createdAt: "desc" }, take: 1, select: FEL_SELECT },
+  dtes: { orderBy: { createdAt: "desc" }, take: 1, select: FEL_SELECT },
 } satisfies Prisma.PaymentInclude;
 
 // Filtro por estado del recibo FEL en el listado de pagos
 function felWhere(fel: ListPaymentsQuery["fel"]): Prisma.PaymentWhereInput {
-  if (fel === "certificado") return { felDocumentos: { some: { estado: "CERTIFICADO" } } };
+  if (fel === "certified") return { dtes: { some: { status: "CERTIFIED" } } };
   if (fel === "error") {
     return {
-      felDocumentos: { some: { estado: "ERROR" } },
-      NOT: { felDocumentos: { some: { estado: "CERTIFICADO" } } },
+      dtes: { some: { status: "ERROR" } },
+      NOT: { dtes: { some: { status: "CERTIFIED" } } },
     };
   }
-  if (fel === "sin") return { NOT: { felDocumentos: { some: { estado: "CERTIFICADO" } } } };
+  if (fel === "none") return { NOT: { dtes: { some: { status: "CERTIFIED" } } } };
   return {};
 }
 
@@ -232,7 +232,7 @@ export async function annulPayment(
 
   // Si tiene recibo FEL certificado, primero se anula ante SAT. Si Digifact
   // falla, el pago no se anula (lanza) para no dejar un recibo vigente.
-  await anularReciboDePago(id, `Anulación del pago: ${input.reason}`, userId);
+  await voidPaymentReceipt(id, `Anulación del pago: ${input.reason}`, userId);
 
   const updated = await prisma.payment.update({
     where: { id },

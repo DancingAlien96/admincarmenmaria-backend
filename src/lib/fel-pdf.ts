@@ -6,12 +6,12 @@
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import path from "node:path";
-import type { FelDocumento } from "@prisma/client";
+import type { Dte } from "@prisma/client";
 import { env } from "../config/env.js";
-import { textoFrase } from "../modules/fel/fel.config.js";
-import { frasesDeDocumento, itemsDeDocumento } from "../modules/fel/fel.payload.js";
+import { phraseText } from "../modules/fel/fel.config.js";
+import { phrasesOf, itemsOf } from "../modules/fel/fel.payload.js";
 
-type DocParaPdf = FelDocumento & {
+type DocParaPdf = Dte & {
   payment?: {
     concept: string;
     method: string;
@@ -52,23 +52,23 @@ function fmtDateTime(d: Date | null): string {
 }
 
 // URL de verificación pública de SAT (la misma que usa bluestock para el QR)
-export function urlVerificacionSat(doc: Pick<FelDocumento, "autorizacion" | "emisorNit" | "receptorId" | "granTotal">): string {
-  const monto = Number(doc.granTotal).toFixed(2);
+export function satVerificationUrl(doc: Pick<Dte, "authorizationNumber" | "issuerNit" | "receiverTaxId" | "grandTotal">): string {
+  const monto = Number(doc.grandTotal).toFixed(2);
   return (
     "https://felpub.c.sat.gob.gt/verificador-web/publico/vistas/verificacionDte.jsf" +
-    `?tipo=autorizacion&numero=${(doc.autorizacion ?? "").toUpperCase()}` +
-    `&emisor=${doc.emisorNit}&receptor=${doc.receptorId}&monto=${monto}`
+    `?tipo=autorizacion&numero=${(doc.authorizationNumber ?? "").toUpperCase()}` +
+    `&emisor=${doc.issuerNit}&receptor=${doc.receiverTaxId}&monto=${monto}`
   );
 }
 
-export function felReceiptFileName(doc: Pick<FelDocumento, "serie" | "numero" | "id">): string {
-  const base = doc.serie && doc.numero ? `${doc.serie}-${doc.numero}` : doc.id.slice(-8).toUpperCase();
+export function felReceiptFileName(doc: Pick<Dte, "series" | "number" | "id">): string {
+  const base = doc.series && doc.number ? `${doc.series}-${doc.number}` : doc.id.slice(-8).toUpperCase();
   return `RECIBO-FEL-${base}.pdf`;
 }
 
 export async function generateFelReceiptPDF(doc: DocParaPdf): Promise<Buffer> {
-  const qr = doc.autorizacion
-    ? await QRCode.toBuffer(urlVerificacionSat(doc), { type: "png", margin: 1, width: 300 })
+  const qr = doc.authorizationNumber
+    ? await QRCode.toBuffer(satVerificationUrl(doc), { type: "png", margin: 1, width: 300 })
     : null;
 
   return new Promise((resolve, reject) => {
@@ -92,11 +92,11 @@ export async function generateFelReceiptPDF(doc: DocParaPdf): Promise<Buffer> {
     }
     const emisorX = left + logoW;
     const emisorW = width * 0.56 - logoW;
-    pdf.fillColor(BRAND).font("Helvetica-Bold").fontSize(11).text(doc.emisorNombreComercial, emisorX, 42, { width: emisorW });
-    pdf.fillColor("#111111").font("Helvetica").fontSize(9).text(doc.emisorNombre, emisorX, pdf.y + 2, { width: emisorW });
-    pdf.fillColor(GRAY).text(`NIT Emisor: ${doc.emisorNit}`, emisorX, pdf.y + 1, { width: emisorW });
-    pdf.text(doc.emisorDireccion, emisorX, pdf.y + 1, { width: emisorW });
-    pdf.text(`Establecimiento: ${doc.emisorEstablecimiento}`, emisorX, pdf.y + 1, { width: emisorW });
+    pdf.fillColor(BRAND).font("Helvetica-Bold").fontSize(11).text(doc.issuerCommercialName, emisorX, 42, { width: emisorW });
+    pdf.fillColor("#111111").font("Helvetica").fontSize(9).text(doc.issuerName, emisorX, pdf.y + 2, { width: emisorW });
+    pdf.fillColor(GRAY).text(`NIT Emisor: ${doc.issuerNit}`, emisorX, pdf.y + 1, { width: emisorW });
+    pdf.text(doc.issuerAddress, emisorX, pdf.y + 1, { width: emisorW });
+    pdf.text(`Establecimiento: ${doc.issuerEstablishmentCode}`, emisorX, pdf.y + 1, { width: emisorW });
     const emisorBottom = pdf.y;
 
     const boxX = left + width * 0.6;
@@ -105,18 +105,18 @@ export async function generateFelReceiptPDF(doc: DocParaPdf): Promise<Buffer> {
     pdf.fillColor(BRAND).font("Helvetica-Bold").fontSize(16).text("RECIBO", boxX, 48, { width: boxW, align: "center" });
     pdf.fillColor(GRAY).font("Helvetica").fontSize(8).text("Documento Tributario Electrónico · FEL", boxX, 68, { width: boxW, align: "center" });
     pdf.fillColor("#111111").fontSize(8.5);
-    pdf.text(`Serie: ${doc.serie ?? "—"}   Número: ${doc.numero ?? "—"}`, boxX + 8, 86, { width: boxW - 16, align: "center" });
+    pdf.text(`Serie: ${doc.series ?? "—"}   Número: ${doc.number ?? "—"}`, boxX + 8, 86, { width: boxW - 16, align: "center" });
     pdf.fillColor(GRAY).fontSize(7.5).text("NÚMERO DE AUTORIZACIÓN", boxX + 8, 102, { width: boxW - 16, align: "center" });
-    pdf.fillColor("#111111").font("Helvetica-Bold").fontSize(8).text(doc.autorizacion ?? "PENDIENTE", boxX + 8, 112, { width: boxW - 16, align: "center" });
+    pdf.fillColor("#111111").font("Helvetica-Bold").fontSize(8).text(doc.authorizationNumber ?? "PENDIENTE", boxX + 8, 112, { width: boxW - 16, align: "center" });
     pdf.fillColor(GRAY).font("Helvetica").fontSize(7.5);
-    pdf.text(`Emisión: ${fmtDateTime(doc.fechaEmision)}`, boxX + 8, 128, { width: boxW - 16, align: "center" });
-    pdf.text(`Certificación: ${fmtDateTime(doc.fechaCertificacion)}`, boxX + 8, 139, { width: boxW - 16, align: "center" });
+    pdf.text(`Emisión: ${fmtDateTime(doc.emittedAt)}`, boxX + 8, 128, { width: boxW - 16, align: "center" });
+    pdf.text(`Certificación: ${fmtDateTime(doc.certifiedAt)}`, boxX + 8, 139, { width: boxW - 16, align: "center" });
 
     let y = Math.max(emisorBottom, 158) + 14;
     pdf.moveTo(left, y).lineTo(right, y).strokeColor(BRAND).lineWidth(1.5).stroke();
 
     // Marca de agua ANULADO
-    if (doc.estado === "ANULADO") {
+    if (doc.status === "VOIDED") {
       pdf.save();
       pdf.fillColor("#dc2626").font("Helvetica-Bold").fontSize(70).opacity(0.18)
         .rotate(-25, { origin: [pdf.page.width / 2, 400] })
@@ -127,22 +127,22 @@ export async function generateFelReceiptPDF(doc: DocParaPdf): Promise<Buffer> {
 
     // --- Receptor ---
     y += 12;
-    const tipoLabel = doc.receptorTipo === "CUI" ? "CUI" : "NIT";
+    const tipoLabel = doc.receiverTaxIdType === "CUI" ? "CUI" : "NIT";
     pdf.fillColor(BRAND).font("Helvetica-Bold").fontSize(9).text("RECEPTOR", left, y);
     pdf.fillColor("#111111").font("Helvetica").fontSize(9.5);
-    pdf.text(`${tipoLabel} Receptor: ${doc.receptorId}`, left, y + 13);
-    pdf.text(`Nombre Receptor: ${doc.receptorNombre}`, left, y + 26, { width: width * 0.6 });
+    pdf.text(`${tipoLabel} Receptor: ${doc.receiverTaxId}`, left, y + 13);
+    pdf.text(`Nombre Receptor: ${doc.receiverName}`, left, y + 26, { width: width * 0.6 });
     if (doc.payment?.student?.expedienteNumber) {
       pdf.fillColor(GRAY).text(`Expediente: ${doc.payment.student.expedienteNumber}`, left, y + 39);
     }
-    pdf.fillColor(GRAY).text(`Moneda: ${doc.moneda}`, boxX, y + 13, { width: boxW, align: "right" });
+    pdf.fillColor(GRAY).text(`Moneda: ${doc.currency}`, boxX, y + 13, { width: boxW, align: "right" });
     if (doc.payment) {
       pdf.text(`Pago: ${METHOD_LABELS[doc.payment.method] ?? doc.payment.method}`, boxX, y + 26, { width: boxW, align: "right" });
     }
     y += 60;
 
     // --- Detalle ---
-    const items = itemsDeDocumento(doc);
+    const items = itemsOf(doc);
     const cols = [
       { label: "#", w: 24, align: "center" as const },
       { label: "B/S", w: 54, align: "center" as const },
@@ -163,16 +163,16 @@ export async function generateFelReceiptPDF(doc: DocParaPdf): Promise<Buffer> {
     y += rowH;
     pdf.font("Helvetica").fontSize(9).fillColor("#111111");
     for (const it of items) {
-      const descH = pdf.heightOfString(it.descripcion, { width: cols[3]!.w - 8 });
+      const descH = pdf.heightOfString(it.description, { width: cols[3]!.w - 8 });
       const h = Math.max(rowH, descH + 12);
       pdf.rect(left, y, width, h).strokeColor(LIGHT).lineWidth(1).stroke();
       const vals = [
-        String(it.numero),
-        it.tipo === "B" ? "Bien" : "Servicio",
-        String(it.cantidad),
-        it.descripcion,
-        it.precio.toFixed(2),
-        it.descuento.toFixed(2),
+        String(it.position),
+        it.itemType === "B" ? "Bien" : "Servicio",
+        String(it.quantity),
+        it.description,
+        it.unitPrice.toFixed(2),
+        it.discount.toFixed(2),
         it.total.toFixed(2),
       ];
       x = left;
@@ -185,14 +185,14 @@ export async function generateFelReceiptPDF(doc: DocParaPdf): Promise<Buffer> {
     pdf.rect(left, y, width, rowH + 2).fill("#f3f4f6");
     pdf.fillColor(BRAND).font("Helvetica-Bold").fontSize(10.5)
       .text("TOTAL", left + 8, y + 7)
-      .text(gtq(Number(doc.granTotal)), right - 150, y + 7, { width: 142, align: "right" });
+      .text(gtq(Number(doc.grandTotal)), right - 150, y + 7, { width: 142, align: "right" });
     y += rowH + 2;
 
     // --- Frases SAT ---
     y += 16;
     pdf.fillColor("#111111").font("Helvetica").fontSize(8.5);
-    for (const f of frasesDeDocumento(doc)) {
-      pdf.text(`* ${textoFrase(f)}`, left, y, { width });
+    for (const f of phrasesOf(doc)) {
+      pdf.text(`* ${phraseText(f)}`, left, y, { width });
       y = pdf.y + 3;
     }
 
@@ -207,9 +207,9 @@ export async function generateFelReceiptPDF(doc: DocParaPdf): Promise<Buffer> {
     if (doc.payment?.registeredBy?.name) {
       pdf.text(`Pago registrado por: ${doc.payment.registeredBy.name}`, left, y + 54, { width: width - qrSize - 20 });
     }
-    if (doc.estado === "ANULADO" && doc.anuladoAt) {
+    if (doc.status === "VOIDED" && doc.voidedAt) {
       pdf.fillColor("#dc2626").text(
-        `ANULADO el ${fmtDateTime(doc.anuladoAt)}${doc.anuladoMotivo ? ` · ${doc.anuladoMotivo}` : ""}`,
+        `ANULADO el ${fmtDateTime(doc.voidedAt)}${doc.voidReason ? ` · ${doc.voidReason}` : ""}`,
         left, y + 68, { width: width - qrSize - 20 }
       );
     }

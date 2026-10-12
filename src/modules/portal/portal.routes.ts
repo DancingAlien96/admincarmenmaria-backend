@@ -25,7 +25,7 @@ import {
 } from "./portal.service.js";
 import { generateReceiptPDF, receiptFileName } from "../../lib/receipt-pdf.js";
 import { generateFelReceiptPDF, felReceiptFileName } from "../../lib/fel-pdf.js";
-import { getReciboFelForUser } from "./portal.service.js";
+import { getFelReceiptForUser } from "./portal.service.js";
 
 export const portalRouter = Router();
 
@@ -122,7 +122,7 @@ portalRouter.get(
 portalRouter.get(
   "/pagos/:paymentId/recibo-fel",
   asyncHandler(async (req: Request, res: Response) => {
-    const doc = await getReciboFelForUser(req.user!.id, req.params.paymentId);
+    const doc = await getFelReceiptForUser(req.user!.id, req.params.paymentId);
     const pdf = await generateFelReceiptPDF(doc);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${felReceiptFileName(doc)}"`);

@@ -5,14 +5,14 @@
 // se descarga desde el panel o el portal.
 
 import QRCode from "qrcode";
-import type { FelDocumento } from "@prisma/client";
+import type { Dte } from "@prisma/client";
 import type { MailAttachment } from "./mailer.js";
-import { generateFelReceiptPDF, felReceiptFileName, urlVerificacionSat } from "./fel-pdf.js";
+import { generateFelReceiptPDF, felReceiptFileName, satVerificationUrl } from "./fel-pdf.js";
 import { env } from "../config/env.js";
 
 const QR_CID = "qrfelsat";
 
-type DocCorreo = FelDocumento & {
+type DocCorreo = Dte & {
   payment?: {
     concept: string;
     method: string;
@@ -48,11 +48,11 @@ export interface BloqueDte {
 }
 
 // Arma el bloque. `conPdf` (opcional) adjunta además la representación gráfica.
-export async function bloqueDteParaCorreo(doc: DocCorreo, conPdf = false): Promise<BloqueDte> {
-  const url = urlVerificacionSat(doc);
+export async function dteEmailBlock(doc: DocCorreo, conPdf = false): Promise<BloqueDte> {
+  const url = satVerificationUrl(doc);
   const qr = await QRCode.toBuffer(url, { type: "png", margin: 1, width: 220 });
-  const tipo = doc.receptorTipo === "CUI" ? "CUI" : "NIT";
-  const total = `Q${Number(doc.granTotal).toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const tipo = doc.receiverTaxIdType === "CUI" ? "CUI" : "NIT";
+  const total = `Q${Number(doc.grandTotal).toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const fila = (k: string, v: string) =>
     `<tr><td style="padding:3px 10px 3px 0;color:#6b7280;white-space:nowrap;">${k}</td><td style="padding:3px 0;color:#111827;word-break:break-all;">${v}</td></tr>`;
@@ -64,14 +64,14 @@ export async function bloqueDteParaCorreo(doc: DocCorreo, conPdf = false): Promi
         <tr>
           <td style="vertical-align:top;">
             <table cellpadding="0" cellspacing="0" style="font-size:13px;">
-              ${fila("Número de autorización", `<strong>${esc(doc.autorizacion ?? "")}</strong>`)}
-              ${fila("Serie", esc(doc.serie ?? ""))}
-              ${fila("Número de DTE", esc(doc.numero ?? ""))}
-              ${fila("Fecha de emisión", esc(fmtFecha(doc.fechaEmision)))}
-              ${fila("Fecha de certificación", esc(fmtFecha(doc.fechaCertificacion)))}
-              ${fila("NIT emisor", esc(doc.emisorNit))}
-              ${fila(`${tipo} receptor`, esc(doc.receptorId))}
-              ${fila("Nombre receptor", esc(doc.receptorNombre))}
+              ${fila("Número de autorización", `<strong>${esc(doc.authorizationNumber ?? "")}</strong>`)}
+              ${fila("Serie", esc(doc.series ?? ""))}
+              ${fila("Número de DTE", esc(doc.number ?? ""))}
+              ${fila("Fecha de emisión", esc(fmtFecha(doc.emittedAt)))}
+              ${fila("Fecha de certificación", esc(fmtFecha(doc.certifiedAt)))}
+              ${fila("NIT emisor", esc(doc.issuerNit))}
+              ${fila(`${tipo} receptor`, esc(doc.receiverTaxId))}
+              ${fila("Nombre receptor", esc(doc.receiverName))}
               ${fila("Total", `<strong>${total}</strong>`)}
             </table>
           </td>
@@ -88,11 +88,11 @@ export async function bloqueDteParaCorreo(doc: DocCorreo, conPdf = false): Promi
 
   const text =
     `Recibo electrónico (FEL) certificado ante la SAT\n` +
-    `Número de autorización: ${doc.autorizacion ?? ""}\n` +
-    `Serie: ${doc.serie ?? ""}  Número de DTE: ${doc.numero ?? ""}\n` +
-    `Fecha de emisión: ${fmtFecha(doc.fechaEmision)}\n` +
-    `Fecha de certificación: ${fmtFecha(doc.fechaCertificacion)}\n` +
-    `NIT emisor: ${doc.emisorNit}  ${tipo} receptor: ${doc.receptorId}\n` +
+    `Número de autorización: ${doc.authorizationNumber ?? ""}\n` +
+    `Serie: ${doc.series ?? ""}  Número de DTE: ${doc.number ?? ""}\n` +
+    `Fecha de emisión: ${fmtFecha(doc.emittedAt)}\n` +
+    `Fecha de certificación: ${fmtFecha(doc.certifiedAt)}\n` +
+    `NIT emisor: ${doc.issuerNit}  ${tipo} receptor: ${doc.receiverTaxId}\n` +
     `Total: ${total}\n` +
     `Verificar en SAT: ${url}\n`;
 

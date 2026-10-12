@@ -2,6 +2,7 @@ import { createApp } from "./app.js";
 import { env, isProd } from "./config/env.js";
 import { prisma } from "./lib/prisma.js";
 import { iniciarRecordatoriosDiarios } from "./lib/recordatorios-diarios.js";
+import { closeOrphanedPending } from "./modules/fel/fel.service.js";
 
 async function main() {
   // Verifica conexion a la base de datos antes de escuchar
@@ -16,6 +17,11 @@ async function main() {
 
   // Recordatorios de cuotas (correo + push) a diario a las 8:00 de Guatemala
   if (isProd) iniciarRecordatoriosDiarios();
+
+  // Emisiones FEL que quedaron a medias por un reinicio: se marcan con error y aviso.
+  void closeOrphanedPending().catch((e) =>
+    console.error("[fel] pendientes huérfanos:", (e as Error).message)
+  );
 
   const shutdown = async () => {
     console.log("\nApagando servidor...");

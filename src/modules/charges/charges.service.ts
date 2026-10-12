@@ -559,10 +559,10 @@ export async function studentAccount(studentId: string) {
       paidAt: true,
       receiptUrl: true,
       // Recibo electrónico (FEL) más reciente del pago
-      felDocumentos: {
+      dtes: {
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { id: true, estado: true, serie: true, numero: true, autorizacion: true, error: true },
+        select: { id: true, status: true, series: true, number: true, authorizationNumber: true, error: true },
       },
     },
   });
@@ -573,11 +573,11 @@ export async function studentAccount(studentId: string) {
   }
   const charges = rows.map((r) => ({
     ...decorate(r, paid.get(r.id) ?? 0, now),
-    payments: (paysByCharge.get(r.id) ?? []).map(({ felDocumentos, ...p }) => ({
+    payments: (paysByCharge.get(r.id) ?? []).map(({ dtes, ...p }) => ({
       ...p,
       amount: Number(p.amount),
       discount: Number(p.discount),
-      fel: felDocumentos[0] ?? null,
+      fel: dtes[0] ?? null,
     })),
   }));
 

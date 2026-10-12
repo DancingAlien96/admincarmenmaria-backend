@@ -5,7 +5,7 @@ import { sendBrandedMail, type MailAttachment } from "./mailer.js";
 import { UPLOAD_ROOT } from "./storage.js";
 import { paidByCharge } from "../modules/charges/charges.service.js";
 import { diasHasta, fmtVencimiento } from "./fecha-gt.js";
-import { bloqueDteParaCorreo } from "./fel-email.js";
+import { dteEmailBlock } from "./fel-email.js";
 
 function fmtMoney(n: number): string {
   return `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -42,15 +42,15 @@ export async function sendPaymentReceiptEmail(paymentId: string): Promise<void> 
     include: {
       student: { select: { fullName: true, email: true, expedienteNumber: true } },
       registeredBy: { select: { name: true } },
-      felDocumentos: { where: { estado: "CERTIFICADO" }, orderBy: { createdAt: "desc" }, take: 1 },
+      dtes: { where: { status: "CERTIFIED" }, orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
   if (!p || !p.student?.email || p.status !== "ACTIVO") return;
   const monto = Number(p.amount) - Number(p.discount);
 
-  const fel = p.felDocumentos[0] ?? null;
+  const fel = p.dtes[0] ?? null;
   const dte = fel
-    ? await bloqueDteParaCorreo({
+    ? await dteEmailBlock({
         ...fel,
         payment: {
           concept: p.concept,

@@ -4,18 +4,18 @@
 //
 //   DIGIFACT_API_URL=https://testnucgt.digifact.com/api \
 //   DIGIFACT_USERNAME=GT.0000XXXXXXXX.USUARIO DIGIFACT_PASSWORD=... \
-//   npx tsx src/cli/fel-prueba.ts --nit 25531395 --receptor CF --monto 400 [--anular]
+//   npx tsx src/cli/fel-prueba.ts --nit 25531395 --receiver CF --amount 400 [--void]
 //
 // --nit: NIT del emisor (debe ser el del usuario de Digifact). Si se omite, se
-//        usa el de la configuración FEL (AppSetting) o el valor por defecto.
-// --anular: tras certificar, anula el documento de prueba.
+//        usa el de la configuración FEL (tabla DteIssuer).
+// --void: tras certificar, anula el documento de prueba.
 
 import crypto from "node:crypto";
-import { certificarNuc, anularDte, digifactAmbiente } from "../lib/digifact.js";
-import { FEL_CONFIG_DEFAULT } from "../modules/fel/fel.config.js";
+import { certifyNuc, voidDte, digifactEnvironment } from "../lib/digifact.js";
+import { establishmentForSede, getFelConfig } from "../modules/fel/fel.config.js";
 import { buildReciPayload } from "../modules/fel/fel.payload.js";
 import { parseTaxId } from "../lib/nit.js";
-import type { FelDocumento } from "@prisma/client";
+import type { Dte } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 
 function arg(name: string, fallback?: string): string | undefined {
@@ -25,88 +25,84 @@ function arg(name: string, fallback?: string): string | undefined {
 }
 
 async function main() {
-  let cfg = FEL_CONFIG_DEFAULT;
-  try {
-    const { getFelConfig } = await import("../modules/fel/fel.config.js");
-    cfg = await getFelConfig();
-  } catch {
-    /* sin BD: se usan los valores por defecto */
-  }
-  const nit = arg("nit", cfg.emisor.nit)!;
-  const receptor = parseTaxId(arg("receptor", "CF"));
-  if (!receptor) throw new Error("Receptor inválido");
-  const monto = Number(arg("monto", "400"));
-  const est = cfg.establecimientos[0]!;
-  const ahora = new Date();
+  // Emisor, establecimiento y frases salen de la configuración guardada (solo lectura).
+  const cfg = await getFelConfig();
+  const nit = arg("nit", cfg.issuer.nit)!;
+  const receiver = parseTaxId(arg("receiver", "CF"));
+  if (!receiver) throw new Error("Receptor inválido");
+  const amount = Number(arg("amount", "400"));
+  const est = establishmentForSede(cfg, null);
+  const now = new Date();
 
-  const doc: FelDocumento = {
+  const doc: Dte = {
     id: "prueba",
     paymentId: "prueba",
+    establishmentId: est.id ?? null,
     internalUuid: crypto.randomUUID(),
-    tipo: "RECI",
-    estado: "PENDIENTE",
-    emisorNit: nit,
-    emisorNombre: cfg.emisor.nombre,
-    emisorNombreComercial: est.nombre,
-    emisorAfiliacion: cfg.emisor.afiliacionIva,
-    emisorEstablecimiento: est.codigo,
-    emisorDireccion: est.direccion,
-    emisorCodigoPostal: est.codigoPostal,
-    emisorMunicipio: est.municipio,
-    emisorDepartamento: est.departamento,
-    emisorCorreo: cfg.emisor.correo || null,
-    receptorId: receptor.id,
-    receptorTipo: receptor.tipo,
-    receptorNombre: arg("nombre", receptor.tipo === "CF" ? "CONSUMIDOR FINAL" : "RECEPTOR DE PRUEBA")!,
-    receptorCorreo: null,
-    receptorDireccion: null,
+    documentType: "RECI",
+    status: "PENDING",
+    issuerNit: nit,
+    issuerName: cfg.issuer.name,
+    issuerCommercialName: est.commercialName,
+    issuerTaxAffiliation: cfg.issuer.taxAffiliation,
+    issuerEstablishmentCode: est.code,
+    issuerAddress: est.address,
+    issuerPostalCode: est.postalCode,
+    issuerMunicipality: est.municipality,
+    issuerDepartment: est.department,
+    issuerEmail: cfg.issuer.email || null,
+    receiverTaxId: receiver.id,
+    receiverTaxIdType: receiver.tipo,
+    receiverName: arg("name", receiver.tipo === "CF" ? "CONSUMIDOR FINAL" : "RECEPTOR DE PRUEBA")!,
+    receiverEmail: null,
+    receiverAddress: null,
     items: [
-      { numero: 1, tipo: "S", descripcion: arg("concepto", "Examen de admisión")!, cantidad: 1, unidad: "UNI", precio: monto, descuento: 0, total: monto },
+      { position: 1, itemType: "S", description: arg("concept", "Examen de admisión")!, quantity: 1, unitOfMeasure: "UNI", unitPrice: amount, discount: 0, total: amount },
     ] as unknown as Prisma.JsonValue,
-    frases: cfg.frases as unknown as Prisma.JsonValue,
-    moneda: "GTQ",
-    granTotal: new Prisma.Decimal(monto),
-    autorizacion: null,
-    serie: null,
-    numero: null,
-    fechaEmision: null,
-    fechaCertificacion: null,
+    phrases: cfg.phrases as unknown as Prisma.JsonValue,
+    currency: "GTQ",
+    grandTotal: new Prisma.Decimal(amount),
+    authorizationNumber: null,
+    series: null,
+    number: null,
+    emittedAt: null,
+    certifiedAt: null,
     xmlKey: null,
     pdfKey: null,
     payload: null,
-    respuesta: null,
+    response: null,
     error: null,
-    anuladoAt: null,
-    anuladoMotivo: null,
-    anuladoById: null,
+    voidedAt: null,
+    voidReason: null,
+    voidedById: null,
     createdById: null,
-    createdAt: ahora,
-    updatedAt: ahora,
+    createdAt: now,
+    updatedAt: now,
   };
 
-  const payload = buildReciPayload(doc, ahora);
-  console.log(`Ambiente: ${digifactAmbiente()} · emisor ${nit} · receptor ${receptor.id} (${receptor.tipo}) · Q${monto}`);
+  const payload = buildReciPayload(doc, now);
+  console.log(`Ambiente: ${digifactEnvironment()} · emisor ${nit} · receptor ${receiver.id} (${receiver.tipo}) · Q${amount}`);
   console.log("Payload:\n" + JSON.stringify(payload, null, 2));
 
-  const r = await certificarNuc(payload, nit);
+  const r = await certifyNuc(payload, nit);
   console.log("\n✅ Certificado");
-  console.log(`  Autorización: ${r.autorizacion}`);
-  console.log(`  Serie: ${r.serie}  Número: ${r.numero}`);
-  console.log(`  Emisión: ${r.fechaEmision?.toISOString()}  Certificación: ${r.fechaCertificacion?.toISOString()}`);
+  console.log(`  Autorización: ${r.authorizationNumber}`);
+  console.log(`  Serie: ${r.series}  Número: ${r.number}`);
+  console.log(`  Emisión: ${r.emittedAt?.toISOString()}  Certificación: ${r.certifiedAt?.toISOString()}`);
   console.log(`  XML: ${r.xmlBase64 ? r.xmlBase64.length + " chars base64" : "no"}  PDF: ${r.pdfBase64 ? r.pdfBase64.length + " chars base64" : "no"}`);
-  console.log("  Respuesta:", JSON.stringify(r.respuesta, null, 2));
+  console.log("  Respuesta:", JSON.stringify(r.response, null, 2));
   if (r.xmlBase64) {
     console.log("\nXML certificado:\n" + Buffer.from(r.xmlBase64, "base64").toString("utf8").slice(0, 3000));
   }
 
-  if (process.argv.includes("--anular")) {
-    const a = await anularDte({
-      nitEmisor: nit,
-      autorizacion: r.autorizacion,
-      idReceptor: receptor.id,
-      fechaEmision: r.fechaEmision ?? ahora,
-      motivo: "Documento de prueba",
-      usuario: process.env.DIGIFACT_USERNAME ?? "prueba",
+  if (process.argv.includes("--void")) {
+    const a = await voidDte({
+      issuerNit: nit,
+      authorizationNumber: r.authorizationNumber,
+      receiverTaxId: receiver.id,
+      emittedAt: r.emittedAt ?? now,
+      reason: "Documento de prueba",
+      username: process.env.DIGIFACT_USERNAME ?? "prueba",
     });
     console.log("\n🗑️  Anulado:", JSON.stringify(a, null, 2));
   }
@@ -116,6 +112,6 @@ main()
   .then(() => process.exit(0))
   .catch((err) => {
     console.error("\n❌", err.message);
-    if (err.detalle) console.error(JSON.stringify(err.detalle, null, 2));
+    if (err.detail) console.error(JSON.stringify(err.detail, null, 2));
     process.exit(1);
   });

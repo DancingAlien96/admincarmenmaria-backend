@@ -8,13 +8,13 @@ import { notFound } from "../../lib/http-error.js";
 import { generateFelReceiptPDF, felReceiptFileName } from "../../lib/fel-pdf.js";
 import { getFelConfig, setFelConfig } from "./fel.config.js";
 import {
-  anularReciboSchema,
-  emitirReciboSchema,
+  voidReceiptSchema,
+  issueReceiptSchema,
   felConfigSchema,
   idParam,
-  listRecibosQuery,
+  listReceiptsQuery,
   paymentIdParam,
-  type ListRecibosQuery,
+  type ListReceiptsQuery,
 } from "./fel.schemas.js";
 import * as service from "./fel.service.js";
 
@@ -27,10 +27,10 @@ felRouter.use(requireAuth);
 
 // Estado de la integración (para mostrar/ocultar el botón "Emitir recibo FEL")
 felRouter.get(
-  "/estado",
+  "/status",
   canRead,
   asyncHandler(async (_req: Request, res: Response) => {
-    res.json(await service.getEstadoFel());
+    res.json(await service.getFelStatus());
   })
 );
 
@@ -39,7 +39,7 @@ felRouter.get(
   "/config",
   requireAdmin,
   asyncHandler(async (_req: Request, res: Response) => {
-    res.json({ config: await getFelConfig(), estado: await service.getEstadoFel() });
+    res.json({ config: await getFelConfig(), status: await service.getFelStatus() });
   })
 );
 felRouter.put(
@@ -47,41 +47,41 @@ felRouter.put(
   requireAdmin,
   validate({ body: felConfigSchema }),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json({ config: await setFelConfig(req.body), estado: await service.getEstadoFel() });
+    res.json({ config: await setFelConfig(req.body), status: await service.getFelStatus() });
   })
 );
 
 // Listado de recibos emitidos
 felRouter.get(
-  "/recibos",
+  "/receipts",
   canRead,
-  validate({ query: listRecibosQuery }),
+  validate({ query: listReceiptsQuery }),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.listRecibos(req.query as unknown as ListRecibosQuery));
+    res.json(await service.listReceipts(req.query as unknown as ListReceiptsQuery));
   })
 );
 
 felRouter.get(
-  "/recibos/:id",
+  "/receipts/:id",
   canRead,
   validate({ params: idParam }),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json({ recibo: await service.getRecibo(req.params.id) });
+    res.json({ receipt: await service.getReceipt(req.params.id) });
   })
 );
 
 // PDF del recibo. Por defecto, la representación gráfica del sistema (con QR);
-// con ?origen=sat devuelve el PDF que entregó Digifact, si se guardó.
+// con ?source=sat devuelve el PDF que entregó Digifact, si se guardó.
 felRouter.get(
-  "/recibos/:id/pdf",
+  "/receipts/:id/pdf",
   canRead,
   validate({ params: idParam }),
   asyncHandler(async (req: Request, res: Response) => {
-    const doc = await service.getReciboRaw(req.params.id);
+    const doc = await service.getReceiptRaw(req.params.id);
     const descargar = req.query.download === "1";
     let pdf: Buffer | null = null;
-    if (req.query.origen === "sat") {
-      pdf = await service.leerArchivo(doc.pdfKey);
+    if (req.query.source === "sat") {
+      pdf = await service.readFile(doc.pdfKey);
       if (!pdf) throw notFound("Este recibo no tiene el PDF del certificador guardado");
     } else {
       pdf = await generateFelReceiptPDF(doc);
@@ -97,12 +97,12 @@ felRouter.get(
 
 // XML certificado (firmado por el certificador)
 felRouter.get(
-  "/recibos/:id/xml",
+  "/receipts/:id/xml",
   canRead,
   validate({ params: idParam }),
   asyncHandler(async (req: Request, res: Response) => {
-    const doc = await service.getReciboRaw(req.params.id);
-    const xml = await service.leerArchivo(doc.xmlKey);
+    const doc = await service.getReceiptRaw(req.params.id);
+    const xml = await service.readFile(doc.xmlKey);
     if (!xml) throw notFound("Este recibo no tiene XML guardado");
     res.setHeader("Content-Type", "application/xml");
     res.setHeader(
@@ -114,42 +114,42 @@ felRouter.get(
 );
 
 felRouter.post(
-  "/recibos/:id/anular",
+  "/receipts/:id/void",
   canEdit,
-  validate({ params: idParam, body: anularReciboSchema }),
+  validate({ params: idParam, body: voidReceiptSchema }),
   asyncHandler(async (req: Request, res: Response) => {
-    const doc = await service.anularRecibo(req.params.id, req.body.motivo, req.user?.id);
-    res.json({ recibo: await service.getRecibo(doc.id) });
+    const doc = await service.voidReceipt(req.params.id, req.body.reason, req.user?.id);
+    res.json({ receipt: await service.getReceipt(doc.id) });
   })
 );
 
 // Reenviar el recibo al correo del receptor
 felRouter.post(
-  "/recibos/:id/enviar",
+  "/receipts/:id/send",
   canEdit,
   validate({ params: idParam }),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json(await service.enviarReciboPorCorreo(req.params.id));
+    res.json(await service.sendReceiptEmail(req.params.id));
   })
 );
 
 // Recibos (historial) de un pago
 felRouter.get(
-  "/pagos/:paymentId",
+  "/payments/:paymentId",
   canRead,
   validate({ params: paymentIdParam }),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json({ recibos: await service.getRecibosDePago(req.params.paymentId) });
+    res.json({ receipts: await service.getPaymentReceipts(req.params.paymentId) });
   })
 );
 
 // Emitir (o reintentar) el recibo FEL de un pago
 felRouter.post(
-  "/pagos/:paymentId/emitir",
+  "/payments/:paymentId/issue",
   canEdit,
-  validate({ params: paymentIdParam, body: emitirReciboSchema }),
+  validate({ params: paymentIdParam, body: issueReceiptSchema }),
   asyncHandler(async (req: Request, res: Response) => {
-    const doc = await service.emitirRecibo(req.params.paymentId, req.body, req.user?.id);
-    res.status(201).json({ recibo: await service.getRecibo(doc.id) });
+    const doc = await service.issueReceipt(req.params.paymentId, req.body, req.user?.id);
+    res.status(201).json({ receipt: await service.getReceipt(doc.id) });
   })
 );

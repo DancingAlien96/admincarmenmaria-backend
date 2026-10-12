@@ -57,6 +57,9 @@ La API queda en `http://localhost:4000`. Credenciales del admin: ver `.env`
 
 ## Recibos electrónicos (FEL · Digifact)
 
+Guía completa de puesta en producción y detalle de lo implementado:
+[docs/fel-recibos-electronicos.md](docs/fel-recibos-electronicos.md).
+
 Los pagos pueden emitir un **recibo electrónico (DTE tipo RECI)** certificado ante
 la SAT a través de Digifact, igual que el recibo que la escuela emite hoy desde el
 portal de SAT (exento de IVA e ISR por ser centro educativo privado).
@@ -65,12 +68,13 @@ portal de SAT (exento de IVA e ISR por ser centro educativo privado).
 - Credenciales de Digifact en `.env`: `DIGIFACT_API_URL`, `DIGIFACT_USERNAME`,
   `DIGIFACT_PASSWORD` (pruebas: `https://testnucgt.digifact.com/api`;
   producción: `https://nucgt.digifact.com/gt.com.apinuc/api`).
-- Datos del emisor, establecimientos por sede y frases SAT: `GET/PUT /api/fel/config`
-  (solo admin). Por defecto trae los datos del recibo oficial (NIT 25531395,
-  establecimiento 4 en Chiquimula, frases 8/2 y 4/8).
-- Interruptores en la misma configuración: `habilitado` (permite emitir),
-  `emitirAutomatico` (emite al aplicar un pago: registro manual, boleta aprobada o
-  tarjeta confirmada) y `enviarCorreo` (correo al emitir a mano desde el panel).
+- Datos del emisor (`DteIssuer`), establecimientos por sede (`DteEstablishment`) y
+  frases SAT (`DtePhrase`): `GET/PUT /api/fel/config` (solo admin). La migración
+  siembra los datos del recibo oficial (NIT 25531395, establecimiento 4 en
+  Chiquimula como predeterminado, frases 8/2 y 4/8).
+- Interruptores (`DteSettings`) en la misma configuración: `enabled` (permite emitir),
+  `autoIssue` (emite al aplicar un pago: registro manual, boleta aprobada o
+  tarjeta confirmada) y `sendEmail` (correo al emitir a mano desde el panel).
 - Identificación fiscal del alumno: campo `taxId` del expediente (también se toma
   del checkout de WooCommerce). Sin ella, el recibo se emite a **CF**.
 
@@ -85,18 +89,25 @@ SAT; si Digifact falla, el pago no se anula. También se puede anular solo el re
 (ej. NIT equivocado) y emitir uno nuevo para el mismo pago.
 
 **Endpoints** (`/api/fel`, permisos de la sección PAYMENTS)
-- `GET /estado` · `GET|PUT /config` (admin)
-- `GET /recibos` (filtros `estado`, `studentId`, `search`) · `GET /recibos/:id`
-- `GET /recibos/:id/pdf` (`?origen=sat` devuelve el PDF del certificador) · `GET /recibos/:id/xml`
-- `POST /recibos/:id/anular` `{ motivo }` · `POST /recibos/:id/enviar` (reenvía el correo)
-- `GET /pagos/:paymentId` (historial) · `POST /pagos/:paymentId/emitir`
-  `{ receptorId?, receptorNombre?, receptorCorreo?, descripcion? }`
+- `GET /status` · `GET|PUT /config` (admin)
+- `GET /receipts` (filtros `status`, `studentId`, `search`) · `GET /receipts/:id`
+- `GET /receipts/:id/pdf` (`?source=sat` devuelve el PDF del certificador) · `GET /receipts/:id/xml`
+- `POST /receipts/:id/void` `{ reason }` · `POST /receipts/:id/send` (reenvía el correo)
+- `GET /payments/:paymentId` (historial) · `POST /payments/:paymentId/issue`
+  `{ receiverTaxId?, receiverName?, receiverEmail?, description? }`
 - Portal del alumno: `GET /api/portal/pagos/:paymentId/recibo-fel`
 - Los pagos (`/api/payments`) incluyen `fel` con el recibo más reciente y aceptan
-  el filtro `fel=certificado|error|sin`.
+  el filtro `fel=certified|error|none`.
 
-**Prueba sin tocar la base de datos** (ambiente de pruebas de Digifact):
+**Ambiente de pruebas**: el usuario de Digifact lleva el formato `GT.<NIT a 12 dígitos>.<USUARIO>`
+(ej. `GT.000025531395.TESTUSER`). El sandbox tarda ~1 minuto en certificar y a veces su
+proxy corta con un 504; el recibo queda en `ERROR` y se reintenta desde el panel. La
+anulación en el sandbox puede responder 9019 ("Error al transmitir anulación a SAT"); en ese
+caso el recibo sigue `CERTIFIED` y el pago no se anula.
+
+**Prueba sin crear pagos ni recibos** (ambiente de pruebas de Digifact; lee el emisor,
+el establecimiento y las frases de la configuración guardada):
 ```bash
 DIGIFACT_API_URL=https://testnucgt.digifact.com/api DIGIFACT_USERNAME=... DIGIFACT_PASSWORD=... \
-  npx tsx src/cli/fel-prueba.ts --nit <NIT del usuario de pruebas> --receptor CF --monto 400 --anular
+  npx tsx src/cli/fel-prueba.ts --nit <NIT del usuario de pruebas> --receiver CF --amount 400 --void
 ```
