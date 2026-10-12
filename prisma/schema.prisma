@@ -1012,7 +1012,7 @@ model Dte {
   id              String    @id @default(cuid())
   paymentId       String
   // Establecimiento con el que se emitio (informativo; la copia de abajo manda)
-  establishmentId String?
+  establishmentId Int?
   // Referencia interna unica del intento de emision
   internalUuid    String    @unique
   documentType    String    @default("RECI")
@@ -1081,7 +1081,7 @@ model Dte {
 // (Chiquimula / Morales Izabal); el marcado como isDefault se usa cuando la
 // sede del pago no coincide con ninguno.
 model DteEstablishment {
-  id             String   @id @default(cuid())
+  id             Int      @id @default(autoincrement())
   code           String   @unique // codigo de establecimiento en SAT
   commercialName String
   sede           String?
@@ -1101,7 +1101,7 @@ model DteEstablishment {
 
 // Frases SAT que lleva cada recibo (TipoFrase + CodigoEscenario).
 model DtePhrase {
-  id           String   @id @default(cuid())
+  id           Int      @id @default(autoincrement())
   phraseType   Int
   scenarioCode Int
   isActive     Boolean  @default(true)

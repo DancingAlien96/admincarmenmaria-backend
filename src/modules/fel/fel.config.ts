@@ -10,7 +10,7 @@ import { prisma } from "../../lib/prisma.js";
 export type TaxAffiliation = "GEN" | "PEQ" | "EXE";
 
 export interface FelEstablishment {
-  id?: string;
+  id?: number;
   code: string; // código de establecimiento registrado en SAT
   commercialName: string; // nombre comercial del establecimiento
   sede: string | null; // sede del sistema a la que corresponde (ej. "Chiquimula")

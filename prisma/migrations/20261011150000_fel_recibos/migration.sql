@@ -5,7 +5,7 @@ ALTER TABLE `Student` ADD COLUMN `taxId` VARCHAR(191) NULL;
 CREATE TABLE `Dte` (
     `id` VARCHAR(191) NOT NULL,
     `paymentId` VARCHAR(191) NOT NULL,
-    `establishmentId` VARCHAR(191) NULL,
+    `establishmentId` INTEGER NULL,
     `internalUuid` VARCHAR(191) NOT NULL,
     `documentType` VARCHAR(191) NOT NULL DEFAULT 'RECI',
     `status` ENUM('PENDING', 'CERTIFIED', 'VOIDED', 'ERROR') NOT NULL DEFAULT 'PENDING',
@@ -56,7 +56,7 @@ CREATE TABLE `Dte` (
 
 -- CreateTable
 CREATE TABLE `DteEstablishment` (
-    `id` VARCHAR(191) NOT NULL,
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
     `code` VARCHAR(191) NOT NULL,
     `commercialName` VARCHAR(191) NOT NULL,
     `sede` VARCHAR(191) NULL,
@@ -76,7 +76,7 @@ CREATE TABLE `DteEstablishment` (
 
 -- CreateTable
 CREATE TABLE `DtePhrase` (
-    `id` VARCHAR(191) NOT NULL,
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
     `phraseType` INTEGER NOT NULL,
     `scenarioCode` INTEGER NOT NULL,
     `isActive` BOOLEAN NOT NULL DEFAULT true,
@@ -133,7 +133,6 @@ ALTER TABLE `Dte` ADD CONSTRAINT `Dte_createdById_fkey` FOREIGN KEY (`createdByI
 -- AddForeignKey
 ALTER TABLE `Dte` ADD CONSTRAINT `Dte_voidedById_fkey` FOREIGN KEY (`voidedById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
-
 -- Datos iniciales: los del recibo que la escuela emite hoy desde el portal de SAT.
 INSERT INTO `DteSettings` (`id`, `enabled`, `autoIssue`, `sendEmail`, `updatedAt`)
 VALUES (1, false, false, true, CURRENT_TIMESTAMP(3));
@@ -142,9 +141,9 @@ INSERT INTO `DteIssuer` (`id`, `nit`, `name`, `commercialName`, `taxAffiliation`
 VALUES (1, '25531395', 'CARMEN ALCIRA , REYES CERÓN DE SARMIENTO', 'ESCUELA PRIVADA DE AUXILIARES DE ENFERMERÍA CARMEN MARÍA', 'GEN', NULL, CURRENT_TIMESTAMP(3));
 
 INSERT INTO `DteEstablishment` (`id`, `code`, `commercialName`, `sede`, `address`, `postalCode`, `municipality`, `department`, `isDefault`, `isActive`, `updatedAt`)
-VALUES ('dte_establishment_4', '4', 'ESCUELA PRIVADA DE AUXILIARES DE ENFERMERÍA CARMEN MARÍA', 'Chiquimula', '12 AVENIDA 2-61 zona 1, CHIQUIMULA, CHIQUIMULA', '20001', 'CHIQUIMULA', 'CHIQUIMULA', true, true, CURRENT_TIMESTAMP(3));
+VALUES (1, '4', 'ESCUELA PRIVADA DE AUXILIARES DE ENFERMERÍA CARMEN MARÍA', 'Chiquimula', '12 AVENIDA 2-61 zona 1, CHIQUIMULA, CHIQUIMULA', '20001', 'CHIQUIMULA', 'CHIQUIMULA', true, true, CURRENT_TIMESTAMP(3));
 
 -- 8/2: exenta del ISR (centros educativos privados) · 4/8: exenta del IVA (cuotas de centros educativos)
 INSERT INTO `DtePhrase` (`id`, `phraseType`, `scenarioCode`, `isActive`, `updatedAt`)
-VALUES ('dte_phrase_8_2', 8, 2, true, CURRENT_TIMESTAMP(3)),
-       ('dte_phrase_4_8', 4, 8, true, CURRENT_TIMESTAMP(3));
+VALUES (1, 8, 2, true, CURRENT_TIMESTAMP(3)),
+       (2, 4, 8, true, CURRENT_TIMESTAMP(3));

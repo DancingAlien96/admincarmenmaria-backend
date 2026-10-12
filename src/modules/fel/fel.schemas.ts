@@ -31,7 +31,7 @@ export const listReceiptsQuery = z.object({
 });
 
 const establishmentSchema = z.object({
-  id: z.string().optional(),
+  id: z.number().int().optional(),
   code: z.string().trim().min(1).max(10),
   commercialName: z.string().trim().min(2).max(200),
   sede: z.string().trim().max(60).nullable().default(null),
