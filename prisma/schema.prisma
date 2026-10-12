@@ -1078,13 +1078,13 @@ model Dte {
 }
 
 // Establecimiento registrado en SAT. `sede` lo enlaza con la sede del sistema
-// (Chiquimula / Morales Izabal); el marcado como isDefault se usa cuando la
-// sede del pago no coincide con ninguno.
+// (Chiquimula / Morales Izabal), a lo sumo un establecimiento por sede; el
+// marcado como isDefault se usa cuando la sede del pago no coincide con ninguno.
 model DteEstablishment {
   id             Int      @id @default(autoincrement())
   code           String   @unique // codigo de establecimiento en SAT
   commercialName String
-  sede           String?
+  sede           String?  @unique
   address        String
   postalCode     String
   municipality   String

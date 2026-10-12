@@ -70,6 +70,7 @@ CREATE TABLE `DteEstablishment` (
     `updatedAt` DATETIME(3) NOT NULL,
 
     UNIQUE INDEX `DteEstablishment_code_key`(`code`),
+    UNIQUE INDEX `DteEstablishment_sede_key`(`sede`),
     INDEX `DteEstablishment_isActive_idx`(`isActive`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

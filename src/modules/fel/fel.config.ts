@@ -105,6 +105,24 @@ export async function getFelConfig(): Promise<FelConfig> {
   };
 }
 
+// Sedes entre las que se elige la de cada establecimiento: las dos de la
+// escuela más cualquier otra que ya esté en uso en expedientes o pagos.
+export const BASE_SEDES = ["Chiquimula", "Morales Izabal"];
+
+export async function listSedes(): Promise<string[]> {
+  const [students, payments, establishments] = await Promise.all([
+    prisma.student.findMany({ where: { sede: { not: null } }, distinct: ["sede"], select: { sede: true } }),
+    prisma.payment.findMany({ where: { sede: { not: null } }, distinct: ["sede"], select: { sede: true } }),
+    prisma.dteEstablishment.findMany({ where: { sede: { not: null } }, select: { sede: true } }),
+  ]);
+  const seen = new Map<string, string>();
+  for (const s of [...BASE_SEDES, ...[...students, ...payments, ...establishments].map((r) => r.sede)]) {
+    const name = s?.trim();
+    if (name && !seen.has(normalize(name))) seen.set(normalize(name), name);
+  }
+  return [...seen.values()];
+}
+
 // Guarda la configuración completa. Los establecimientos y frases que ya no
 // vienen se eliminan (los recibos emitidos conservan su copia de los datos);
 // para dejar de usarlos sin perderlos se marcan como inactivos.
@@ -127,6 +145,8 @@ export async function setFelConfig(cfg: FelConfig): Promise<FelConfig> {
     prisma.dteEstablishment.deleteMany({
       where: { code: { notIn: cfg.establishments.map((e) => e.code) } },
     }),
+    // La sede es única: se libera antes de reasignarla para poder intercambiarlas.
+    prisma.dteEstablishment.updateMany({ data: { sede: null } }),
     prisma.dtePhrase.deleteMany({
       where: {
         NOT: { OR: cfg.phrases.map((p) => ({ phraseType: p.phraseType, scenarioCode: p.scenarioCode })) },
@@ -136,7 +156,7 @@ export async function setFelConfig(cfg: FelConfig): Promise<FelConfig> {
   for (const e of cfg.establishments) {
     const data = {
       commercialName: e.commercialName,
-      sede: e.sede,
+      sede: e.sede?.trim() || null,
       address: e.address,
       postalCode: e.postalCode,
       municipality: e.municipality,

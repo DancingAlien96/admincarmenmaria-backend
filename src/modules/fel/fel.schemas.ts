@@ -34,7 +34,13 @@ const establishmentSchema = z.object({
   id: z.number().int().optional(),
   code: z.string().trim().min(1).max(10),
   commercialName: z.string().trim().min(2).max(200),
-  sede: z.string().trim().max(60).nullable().default(null),
+  sede: z
+    .string()
+    .trim()
+    .max(60)
+    .nullable()
+    .default(null)
+    .transform((v) => v || null),
   address: z.string().trim().min(3).max(200),
   postalCode: z.string().trim().min(1).max(10),
   municipality: z.string().trim().min(2).max(80),
@@ -60,6 +66,13 @@ export const felConfigSchema = z.object({
     .refine((list) => new Set(list.map((e) => e.code)).size === list.length, {
       message: "Hay códigos de establecimiento repetidos",
     })
+    .refine(
+      (list) => {
+        const sedes = list.map((e) => e.sede?.toLowerCase()).filter(Boolean);
+        return new Set(sedes).size === sedes.length;
+      },
+      { message: "Solo puede haber un establecimiento por sede" }
+    )
     .refine((list) => list.some((e) => e.isActive), {
       message: "Debe quedar al menos un establecimiento activo",
     }),

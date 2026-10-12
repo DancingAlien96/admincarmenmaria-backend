@@ -6,7 +6,7 @@ import { requireAuth } from "../../middleware/require-auth.js";
 import { requireAdmin, requireSection } from "../../middleware/authorize.js";
 import { notFound } from "../../lib/http-error.js";
 import { generateFelReceiptPDF, felReceiptFileName } from "../../lib/fel-pdf.js";
-import { getFelConfig, setFelConfig } from "./fel.config.js";
+import { getFelConfig, listSedes, setFelConfig } from "./fel.config.js";
 import {
   voidReceiptSchema,
   issueReceiptSchema,
@@ -39,7 +39,7 @@ felRouter.get(
   "/config",
   requireAdmin,
   asyncHandler(async (_req: Request, res: Response) => {
-    res.json({ config: await getFelConfig(), status: await service.getFelStatus() });
+    res.json({ config: await getFelConfig(), status: await service.getFelStatus(), sedes: await listSedes() });
   })
 );
 felRouter.put(
@@ -47,7 +47,7 @@ felRouter.put(
   requireAdmin,
   validate({ body: felConfigSchema }),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json({ config: await setFelConfig(req.body), status: await service.getFelStatus() });
+    res.json({ config: await setFelConfig(req.body), status: await service.getFelStatus(), sedes: await listSedes() });
   })
 );
 

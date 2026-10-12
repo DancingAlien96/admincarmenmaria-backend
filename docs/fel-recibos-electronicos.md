@@ -80,8 +80,8 @@ revisar:
    del recibo oficial; corregir solo si SAT tiene otros datos.
 2. **Establecimientos**: viene el establecimiento `4` de Chiquimula. Si la sede de
    Morales Izabal tiene su propio código de establecimiento en SAT, agregarlo con
-   su dirección y escribir `Morales Izabal` en "Sede del sistema" para que los pagos
-   de esa sede lo usen. El marcado como **Predeterminado** se usa cuando la sede
+   su dirección y elegir `Morales Izabal` en "Sede del sistema" para que los pagos
+   de esa sede lo usen. Solo puede haber un establecimiento por sede. El marcado como **Predeterminado** se usa cuando la sede
    del pago no coincide con ninguno.
 3. **Frases SAT**: `8 / 2` (exenta del ISR) y `4 / 8` (exenta del IVA). No cambiar
    salvo indicación del contador. Cada frase lleva una descripción (el texto que
@@ -104,8 +104,9 @@ revisar:
 4. Descargar el PDF y el XML.
 5. Probar una **anulación ante SAT** con ese mismo recibo (motivo: "Prueba") y
    emitir uno nuevo para el pago. En el ambiente de pruebas de Digifact la anulación
-   respondía con el código 9019; en producción debe funcionar. Si no, contactar a
-   Digifact con el número de autorización.
+   nunca se logró completar (ver sección 5), así que esta es la primera comprobación
+   real. Si falla, el recibo queda certificado y el pago sin anular: contactar a
+   Digifact con el número de autorización antes de activar la emisión automática.
 
 ### Paso 6 · Identificación fiscal de los alumnos
 
@@ -186,8 +187,14 @@ que ya se usa para los demás correos del sistema.
 - Emisión automática al registrar un pago: correcta.
 - El sandbox tarda ~55 s por certificación y a veces su proxy corta con 504; el
   recibo queda en Error y el reintento funciona.
-- Anulación: el sandbox respondió siempre 9019 ("Error al transmitir anulación a
-  SAT"). Pendiente de comprobar en producción.
+- Frases y establecimientos inactivos: no se envían; el recibo lleva solo los activos.
+- Anulación: **no se logró en el sandbox**. Primero respondió 9019 ("Error al
+  transmitir anulación a SAT") y en la última tanda un 400 ("Verifique que el
+  documento a anular existe y se encuentre en el rango de fechas aceptado por SAT").
+  En ambos casos el sistema dejó el recibo certificado y no anuló el pago, que es lo
+  esperado. Pendiente de comprobar en producción.
+- Sin comprobar: envío real del correo (SMTP no configurado en local) y descarga del
+  recibo desde el portal con una cuenta de alumno.
 
 ## 6. Respaldo
 
@@ -197,7 +204,8 @@ documento legal del recibo.
 
 ## 7. Pendientes recomendados
 
-- Confirmar con Digifact la anulación en producción.
+- Confirmar con Digifact la anulación en producción (es el único flujo que no se
+  pudo verificar de punta a punta).
 - Si en producción se observan 504, agregar la adenda con referencia interna
   (`VALIDAR_REFERENCIA_INTERNA`) para que Digifact rechace duplicados de un mismo
   pago.
