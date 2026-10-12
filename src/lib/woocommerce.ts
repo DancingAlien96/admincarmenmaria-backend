@@ -1,5 +1,6 @@
 import { env } from "../config/env.js";
 import { HttpError } from "./http-error.js";
+import { parseTaxId } from "./nit.js";
 
 // Cliente minimo de la API REST v3 de WooCommerce (solo lectura de pedidos).
 // Node 22 trae fetch nativo.
@@ -57,6 +58,8 @@ export interface WooBuyerInfo {
   department: string | null;
   address: string | null;
   dpi: string | null;
+  // Identificación fiscal (NIT) del checkout (meta "nit"), validada con su dígito verificador
+  taxId: string | null;
 }
 
 export function extractBuyerInfo(order: WooOrder): WooBuyerInfo {
@@ -71,12 +74,17 @@ export function extractBuyerInfo(order: WooOrder): WooBuyerInfo {
     (m) => String(m.key ?? "").toLowerCase() === "nit"
   );
   let dpi: string | null = null;
+  let taxId: string | null = null;
   if (nitMeta?.value) {
     const raw = String(nitMeta.value).replace(/\s+/g, "");
     // DPI de Guatemala: 13 digitos. Solo lo tomamos si lo parece.
     if (/^\d{13}$/.test(raw)) dpi = raw;
+    else {
+      const parsed = parseTaxId(raw);
+      if (parsed?.tipo === "NIT") taxId = parsed.id;
+    }
   }
-  return { municipality: city, department, address, dpi };
+  return { municipality: city, department, address, dpi, taxId };
 }
 
 // Normaliza la sede a un nombre canonico. Devuelve null si no la reconoce.

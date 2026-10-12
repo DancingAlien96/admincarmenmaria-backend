@@ -558,6 +558,12 @@ export async function studentAccount(studentId: string) {
       status: true,
       paidAt: true,
       receiptUrl: true,
+      // Recibo electrónico (FEL) más reciente del pago
+      felDocumentos: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { id: true, estado: true, serie: true, numero: true, autorizacion: true, error: true },
+      },
     },
   });
   const paysByCharge = new Map<string, typeof payRows>();
@@ -567,10 +573,11 @@ export async function studentAccount(studentId: string) {
   }
   const charges = rows.map((r) => ({
     ...decorate(r, paid.get(r.id) ?? 0, now),
-    payments: (paysByCharge.get(r.id) ?? []).map((p) => ({
+    payments: (paysByCharge.get(r.id) ?? []).map(({ felDocumentos, ...p }) => ({
       ...p,
       amount: Number(p.amount),
       discount: Number(p.discount),
+      fel: felDocumentos[0] ?? null,
     })),
   }));
 

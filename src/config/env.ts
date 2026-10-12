@@ -51,6 +51,14 @@ const envSchema = z.object({
   // Notificaciones push (PWA). Llaves VAPID: npx web-push generate-vapid-keys
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
+  // --- FEL (Digifact): recibos electronicos certificados ante SAT ---
+  // Pruebas: https://testnucgt.digifact.com/api · Produccion: https://nucgt.digifact.com/gt.com.apinuc/api
+  DIGIFACT_API_URL: z.string().url().optional(),
+  DIGIFACT_USERNAME: z.string().optional(), // ej. GT.000025531395.USUARIO
+  DIGIFACT_PASSWORD: z.string().optional(),
+  // Datos del certificador que se imprimen en el recibo
+  DIGIFACT_NAME: z.string().default("DIGIFACT SERVICIOS, SOCIEDAD ANONIMA"),
+  DIGIFACT_TAX_ID: z.string().default("77454820"),
 });
 
 const parsed = envSchema.safeParse(process.env);

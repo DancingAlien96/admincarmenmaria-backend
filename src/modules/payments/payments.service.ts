@@ -11,19 +11,23 @@ import {
 } from "../../lib/woocommerce.js";
 import { normalizeName } from "../../lib/normalize.js";
 import { nameSimilarity } from "../../lib/similarity.js";
+import { FEL_SELECT, serializeFel, anularReciboDePago } from "../fel/fel.service.js";
+import { alAplicarPagoEnSegundoPlano } from "../../lib/pago-aplicado.js";
 
 // Completa los datos del expediente (municipio, departamento, dirección, DPI)
 // con lo que trae el checkout, sin sobrescribir lo que ya tenga cargado.
 async function applyBuyerInfoToStudent(studentId: string, info: WooBuyerInfo) {
   const s = await prisma.student.findUnique({
     where: { id: studentId },
-    select: { municipality: true, department: true, address: true, dpi: true },
+    select: { municipality: true, department: true, address: true, dpi: true, taxId: true },
   });
   if (!s) return;
   const data: Record<string, string> = {};
   if (!s.municipality && info.municipality) data.municipality = info.municipality;
   if (!s.department && info.department) data.department = info.department;
   if (!s.address && info.address) data.address = info.address;
+  // Identificación fiscal (NIT) del checkout: sirve para emitir el recibo FEL a nombre del alumno.
+  if (!s.taxId && info.taxId) data.taxId = info.taxId;
   if (!s.dpi && info.dpi) {
     // El DPI es único: solo se asigna si ningún otro expediente lo tiene.
     const dup = await prisma.student.findUnique({ where: { dpi: info.dpi } });
@@ -47,23 +51,41 @@ function mapWooMethod(method: string): "TRANSFERENCIA" | "TARJETA" | "DEPOSITO" 
   return "DEPOSITO";
 }
 
-// Convierte Decimal -> number para el frontend
-type WithDecimals = { amount: unknown; discount: unknown };
+// Convierte Decimal -> number para el frontend. El recibo FEL más reciente
+// (si hay) viaja como `fel`.
+type FelRow = Prisma.FelDocumentoGetPayload<{ select: typeof FEL_SELECT }>;
+type WithDecimals = { amount: unknown; discount: unknown; felDocumentos?: FelRow[] };
 function serialize<T extends WithDecimals>(p: T) {
+  const { felDocumentos, ...rest } = p;
   return {
-    ...p,
+    ...rest,
     amount: Number(p.amount),
     discount: Number(p.discount),
     net: Number(p.amount) - Number(p.discount),
+    fel: felDocumentos?.[0] ? serializeFel(felDocumentos[0]) : null,
   };
 }
 
 const include = {
-  student: { select: { id: true, fullName: true, dpi: true } },
+  student: { select: { id: true, fullName: true, dpi: true, taxId: true } },
   feeType: { select: { id: true, name: true, category: true } },
   registeredBy: { select: { name: true } },
   annulledBy: { select: { name: true } },
+  felDocumentos: { orderBy: { createdAt: "desc" }, take: 1, select: FEL_SELECT },
 } satisfies Prisma.PaymentInclude;
+
+// Filtro por estado del recibo FEL en el listado de pagos
+function felWhere(fel: ListPaymentsQuery["fel"]): Prisma.PaymentWhereInput {
+  if (fel === "certificado") return { felDocumentos: { some: { estado: "CERTIFICADO" } } };
+  if (fel === "error") {
+    return {
+      felDocumentos: { some: { estado: "ERROR" } },
+      NOT: { felDocumentos: { some: { estado: "CERTIFICADO" } } },
+    };
+  }
+  if (fel === "sin") return { NOT: { felDocumentos: { some: { estado: "CERTIFICADO" } } } };
+  return {};
+}
 
 export async function listPayments(q: ListPaymentsQuery) {
   const where: Prisma.PaymentWhereInput = {
@@ -76,6 +98,7 @@ export async function listPayments(q: ListPaymentsQuery) {
     ...(q.source ? { source: q.source } : {}),
     ...(q.method ? { method: q.method } : {}),
     ...(q.unlinked === true ? { studentId: null } : {}),
+    ...felWhere(q.fel),
     ...(q.year
       ? {
           paidAt: {
@@ -188,14 +211,8 @@ export async function createManualPayment(
     void import("../whatsapp/notifications.service.js")
       .then((m) => m.notifyPaymentReceived(payment.id))
       .catch((e) => console.error("[notify pago]", (e as Error).message));
-    // Y por correo (confirmación de pago).
-    void import("../../lib/email-notify.js")
-      .then((m) => m.sendPaymentReceiptEmail(payment.id))
-      .catch((e) => console.error("[email pago]", (e as Error).message));
-    // Aviso en el portal + notificación push
-    void import("../avisos/avisos.service.js")
-      .then((m) => m.notificarPagoAplicado(payment.id))
-      .catch((e) => console.error("[aviso pago]", (e as Error).message));
+    // Recibo FEL + correo de confirmación (con el DTE y su QR) + aviso en el portal
+    alAplicarPagoEnSegundoPlano(payment.id);
   }
 
   return serialize(payment);
@@ -212,6 +229,10 @@ export async function annulPayment(
   if (payment.status === "ANULADO") {
     throw badRequest("El pago ya esta anulado");
   }
+
+  // Si tiene recibo FEL certificado, primero se anula ante SAT. Si Digifact
+  // falla, el pago no se anula (lanza) para no dejar un recibo vigente.
+  await anularReciboDePago(id, `Anulación del pago: ${input.reason}`, userId);
 
   const updated = await prisma.payment.update({
     where: { id },
@@ -269,14 +290,8 @@ export async function approvePayment(id: string, userId?: string) {
     include,
   });
   if (payment.chargeId) await recomputeChargeStatus(payment.chargeId);
-  // Confirmación de pago al alumno (correo), sin bloquear.
-  void import("../../lib/email-notify.js")
-    .then((m) => m.sendPaymentReceiptEmail(updated.id))
-    .catch((e) => console.error("[email boleta aprobada]", (e as Error).message));
-  // Aviso en el portal + notificación push
-  void import("../avisos/avisos.service.js")
-    .then((m) => m.notificarPagoAplicado(updated.id))
-    .catch((e) => console.error("[aviso pago]", (e as Error).message));
+  // Recibo FEL + correo de confirmación (con el DTE y su QR) + aviso en el portal
+  alAplicarPagoEnSegundoPlano(updated.id);
   return serialize(updated);
 }
 

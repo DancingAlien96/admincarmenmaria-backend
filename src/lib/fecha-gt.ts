@@ -29,6 +29,24 @@ export function estaVencida(due: Date, now: Date = new Date()): boolean {
   return diasHasta(due, now) < 0;
 }
 
+// Fecha y hora en formato ISO con la zona de Guatemala ("2026-10-07T17:06:50-06:00"),
+// como la exige SAT para FechaHoraEmision de los DTE.
+export function fechaIsoGuatemala(d: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ_GT,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? "00";
+  const hour = get("hour") === "24" ? "00" : get("hour");
+  return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}:${get("second")}-06:00`;
+}
+
 // Fecha de vencimiento en texto ("16 de octubre de 2026"). Se formatea en UTC
 // porque es una fecha de calendario; en hora de Guatemala saldría un día antes.
 export function fmtVencimiento(due: Date): string {

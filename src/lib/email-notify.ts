@@ -5,6 +5,7 @@ import { sendBrandedMail, type MailAttachment } from "./mailer.js";
 import { UPLOAD_ROOT } from "./storage.js";
 import { paidByCharge } from "../modules/charges/charges.service.js";
 import { diasHasta, fmtVencimiento } from "./fecha-gt.js";
+import { bloqueDteParaCorreo } from "./fel-email.js";
 
 function fmtMoney(n: number): string {
   return `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -32,13 +33,35 @@ function firstName(fullName: string): string {
 
 // --- 1. Confirmación de pago -------------------------------------------------
 
+// Si el pago ya tiene su recibo electrónico (FEL) certificado, el correo lleva
+// en el cuerpo los datos del DTE (autorización, serie, número, fechas) y el QR
+// para consultarlo ante SAT. Sin adjuntos.
 export async function sendPaymentReceiptEmail(paymentId: string): Promise<void> {
   const p = await prisma.payment.findUnique({
     where: { id: paymentId },
-    include: { student: { select: { fullName: true, email: true } } },
+    include: {
+      student: { select: { fullName: true, email: true, expedienteNumber: true } },
+      registeredBy: { select: { name: true } },
+      felDocumentos: { where: { estado: "CERTIFICADO" }, orderBy: { createdAt: "desc" }, take: 1 },
+    },
   });
   if (!p || !p.student?.email || p.status !== "ACTIVO") return;
   const monto = Number(p.amount) - Number(p.discount);
+
+  const fel = p.felDocumentos[0] ?? null;
+  const dte = fel
+    ? await bloqueDteParaCorreo({
+        ...fel,
+        payment: {
+          concept: p.concept,
+          method: p.method,
+          paidAt: p.paidAt,
+          registeredBy: p.registeredBy,
+          student: p.student,
+        },
+      })
+    : null;
+
   const body = `
     <p>Hola, ${firstName(p.student.fullName)}:</p>
     <p>Confirmamos que recibimos tu pago. ¡Gracias!</p>
@@ -47,18 +70,23 @@ export async function sendPaymentReceiptEmail(paymentId: string): Promise<void> 
       <p style="margin:0 0 4px;"><strong>Monto:</strong> ${fmtMoney(monto)}</p>
       <p style="margin:0;"><strong>Fecha:</strong> ${fmtDate(p.paidAt)}</p>
     </div>
+    ${dte?.html ?? ""}
     <p style="color:#6b7280;font-size:13px;">Puedes ver tu estado de cuenta en el Campus, en la sección de Pagos.</p>`;
   const text =
     `Hola, ${firstName(p.student.fullName)}:\n\n` +
     `Confirmamos tu pago.\n` +
     `Concepto: ${p.concept}\nMonto: ${fmtMoney(monto)}\nFecha: ${fmtDate(p.paidAt)}\n\n` +
+    (dte ? `${dte.text}\n` : "") +
     `Puedes ver tu estado de cuenta en el Campus.`;
   await sendBrandedMail({
     to: p.student.email,
-    subject: "Confirmación de pago · Campus Carmen María",
-    heading: "Pago recibido",
+    subject: fel
+      ? "Confirmación de pago y recibo electrónico · Campus Carmen María"
+      : "Confirmación de pago · Campus Carmen María",
+    heading: fel ? "Pago recibido · Recibo electrónico" : "Pago recibido",
     bodyHtml: body,
     text,
+    attachments: dte ? [...dte.inline, ...dte.adjuntos] : undefined,
   });
 }
 

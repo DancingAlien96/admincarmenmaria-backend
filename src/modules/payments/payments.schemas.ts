@@ -47,6 +47,8 @@ export const listPaymentsQuery = z.object({
   year: z.coerce.number().int().min(2000).max(2100).optional(),
   // Promoción del alumno (año de inscripción)
   cohort: z.coerce.number().int().min(2000).max(2100).optional(),
+  // Estado del recibo FEL: con recibo certificado, con error, o sin recibo
+  fel: z.enum(["certificado", "error", "sin"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });

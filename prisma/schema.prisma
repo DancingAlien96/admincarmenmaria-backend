@@ -68,6 +68,8 @@ model User {
   avisosRecibidos    AvisoDestinatario[]
   avisosCreados      Aviso[]                @relation("AvisoCreatedBy")
   asistenteMensajes  AsistenteMensaje[]
+  felEmitidos        FelDocumento[]         @relation("FelCreatedBy")
+  felAnulados        FelDocumento[]         @relation("FelAnuladoBy")
 
   @@index([email])
 }
@@ -205,6 +207,9 @@ model Student {
   // Opcional: los estudiantes creados desde un pago aun no tienen DPI.
   // Sigue siendo unico cuando esta presente (MySQL permite varios NULL).
   dpi              String?       @unique // Identificacion oficial, no repetible
+  // Identificacion fiscal (NIT) para los recibos electronicos (FEL). Sin ella
+  // el recibo se emite a "CF".
+  taxId            String?
   birthDate        DateTime?
   // Direccion
   department       String?
@@ -428,11 +433,14 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  student      Student? @relation(fields: [studentId], references: [id])
-  feeType      FeeType? @relation(fields: [feeTypeId], references: [id])
-  charge       Charge?  @relation(fields: [chargeId], references: [id])
-  registeredBy User?    @relation("PaymentRegisteredBy", fields: [registeredById], references: [id])
-  annulledBy   User?    @relation("PaymentAnnulledBy", fields: [annulledById], references: [id])
+  student       Student?       @relation(fields: [studentId], references: [id])
+  feeType       FeeType?       @relation(fields: [feeTypeId], references: [id])
+  charge        Charge?        @relation(fields: [chargeId], references: [id])
+  registeredBy  User?          @relation("PaymentRegisteredBy", fields: [registeredById], references: [id])
+  annulledBy    User?          @relation("PaymentAnnulledBy", fields: [annulledById], references: [id])
+  // Recibos electronicos (FEL) de este pago. Normalmente uno; si se anula
+  // (ej. NIT equivocado) se puede emitir otro, y el anulado queda en el historial.
+  felDocumentos FelDocumento[]
 
   @@index([studentId])
   @@index([status])
@@ -984,4 +992,89 @@ model AsistenteMensaje {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+// --- FEL: recibos electronicos (RECI) certificados con Digifact ------------
+
+enum FelEstado {
+  PENDIENTE // creado, aun no enviado o en proceso
+  CERTIFICADO // certificado ante SAT (tiene autorizacion, serie y numero)
+  ANULADO // anulado ante SAT
+  ERROR // la certificacion fallo; se puede reintentar
+}
+
+// Documento Tributario Electronico (DTE) emitido por un pago. Guarda una copia
+// de los datos del emisor y receptor tal como se enviaron, para que el recibo
+// se pueda reimprimir igual aunque cambie la configuracion despues.
+model FelDocumento {
+  id           String    @id @default(cuid())
+  paymentId    String
+  // Referencia interna unica del intento de emision
+  internalUuid String    @unique
+  tipo         String    @default("RECI")
+  estado       FelEstado @default(PENDIENTE)
+
+  // Emisor (copia de la configuracion al momento de emitir)
+  emisorNit             String
+  emisorNombre          String
+  emisorNombreComercial String
+  emisorAfiliacion      String  @default("GEN")
+  emisorEstablecimiento String
+  emisorDireccion       String
+  emisorCodigoPostal    String
+  emisorMunicipio       String
+  emisorDepartamento    String
+  emisorCorreo          String?
+
+  // Receptor
+  receptorId        String // NIT, CUI o "CF"
+  receptorTipo      String // NIT | CUI | CF
+  receptorNombre    String
+  receptorCorreo    String?
+  receptorDireccion String?
+
+  // Detalle del recibo (lineas y frases SAT enviadas)
+  items     Json
+  frases    Json
+  moneda    String  @default("GTQ")
+  granTotal Decimal @db.Decimal(10, 2)
+
+  // Certificacion (respuesta de Digifact / SAT)
+  autorizacion       String? // UUID de autorizacion
+  serie              String?
+  numero             String?
+  fechaEmision       DateTime?
+  fechaCertificacion DateTime?
+  // XML y PDF certificados, guardados en /uploads
+  xmlKey             String?
+  pdfKey             String?
+  payload            Json? // JSON enviado a Digifact
+  respuesta          Json? // respuesta cruda (sin los archivos base64)
+  error              String?   @db.Text
+
+  // Anulacion
+  anuladoAt     DateTime?
+  anuladoMotivo String?   @db.Text
+  anuladoById   String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("FelCreatedBy", fields: [createdById], references: [id])
+  anuladoBy User?   @relation("FelAnuladoBy", fields: [anuladoById], references: [id])
+
+  @@index([paymentId])
+  @@index([estado])
+  @@index([autorizacion])
+  @@index([createdAt])
+}
+
+// Token de sesion de Digifact (una sola fila). Se renueva al vencer o al 401.
+model FelToken {
+  id        Int       @id @default(1)
+  token     String    @db.Text
+  expiresAt DateTime?
+  updatedAt DateTime  @updatedAt
 }

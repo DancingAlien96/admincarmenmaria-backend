@@ -24,6 +24,8 @@ import {
   confirmRecurrentePayment,
 } from "./portal.service.js";
 import { generateReceiptPDF, receiptFileName } from "../../lib/receipt-pdf.js";
+import { generateFelReceiptPDF, felReceiptFileName } from "../../lib/fel-pdf.js";
+import { getReciboFelForUser } from "./portal.service.js";
 
 export const portalRouter = Router();
 
@@ -112,6 +114,18 @@ portalRouter.get(
       "Content-Disposition",
       `attachment; filename="${receiptFileName(payment)}"`
     );
+    res.send(pdf);
+  })
+);
+
+// Recibo electrónico (FEL) certificado de un pago del alumno
+portalRouter.get(
+  "/pagos/:paymentId/recibo-fel",
+  asyncHandler(async (req: Request, res: Response) => {
+    const doc = await getReciboFelForUser(req.user!.id, req.params.paymentId);
+    const pdf = await generateFelReceiptPDF(doc);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${felReceiptFileName(doc)}"`);
     res.send(pdf);
   })
 );
