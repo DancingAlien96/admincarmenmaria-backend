@@ -53,7 +53,8 @@ const envSchema = z.object({
   VAPID_PRIVATE_KEY: z.string().optional(),
   // --- FEL (Digifact): recibos electronicos certificados ante SAT ---
   // Pruebas: https://testnucgt.digifact.com/api · Produccion: https://nucgt.digifact.com/gt.com.apinuc/api
-  DIGIFACT_API_URL: z.string().url().optional(),
+  // Vacía = no configurada (docker-compose la pasa como "" si no existe el secreto)
+  DIGIFACT_API_URL: z.preprocess((v) => (v === "" ? undefined : v), z.string().url().optional()),
   DIGIFACT_USERNAME: z.string().optional(), // ej. GT.000025531395.USUARIO
   DIGIFACT_PASSWORD: z.string().optional(),
   // Datos del certificador que se imprimen en el recibo
