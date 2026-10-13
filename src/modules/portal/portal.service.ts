@@ -19,6 +19,7 @@ import {
 } from "../matricula/matricula.service.js";
 import { env } from "../../config/env.js";
 import { REVIEWABLE_PAYMENT, TILOPAY_VERIFY_NOTE } from "../../lib/payment-review.js";
+import { alAplicarPagoEnSegundoPlano } from "../../lib/pago-aplicado.js";
 import {
   isRecurrenteConfigured,
   createCheckout as createRecurrenteCheckout,
@@ -71,6 +72,10 @@ export async function getCuotasForUser(userId: string) {
             : c.paid > 0
               ? "parcial"
               : "pendiente";
+      // Último pago aprobado con recibo electrónico certificado
+      const conFel = [...c.payments]
+        .reverse()
+        .find((p) => p.status === "ACTIVO" && p.fel?.status === "CERTIFIED");
       return {
         id: c.id,
         concept: c.concept,
@@ -79,6 +84,9 @@ export async function getCuotasForUser(userId: string) {
         saldo: c.saldo,
         dueDate: c.dueDate,
         estado,
+        fel: conFel
+          ? { paymentId: conFel.id, series: conFel.fel!.series, number: conFel.fel!.number }
+          : null,
       };
     });
 
@@ -243,13 +251,8 @@ async function aprobarPagoTarjeta(paymentId: string) {
     data: { status: "ACTIVO", paidAt: new Date() },
   });
   if (p.chargeId) await recomputeChargeStatus(p.chargeId);
-  void import("../../lib/email-notify.js")
-    .then((m) => m.sendPaymentReceiptEmail(paymentId))
-    .catch((e) => console.error("[email pago tarjeta]", (e as Error).message));
-  // Aviso en el portal + notificación push
-  void import("../avisos/avisos.service.js")
-    .then((m) => m.notificarPagoAplicado(paymentId))
-    .catch((e) => console.error("[aviso pago]", (e as Error).message));
+  // Recibo FEL + correo de confirmación (con el DTE y su QR) + aviso en el portal
+  alAplicarPagoEnSegundoPlano(paymentId);
 }
 
 // Aplica un pago confirmado por Recurrente. Si el monto no coincide con el
@@ -354,13 +357,8 @@ export async function confirmCardPayment(
       data: { status: "ACTIVO", paidAt: new Date() },
     });
     if (pending.chargeId) await recomputeChargeStatus(pending.chargeId);
-    void import("../../lib/email-notify.js")
-      .then((m) => m.sendPaymentReceiptEmail(pending.id))
-      .catch((e) => console.error("[email pago tarjeta]", (e as Error).message));
-    // Aviso en el portal + notificación push
-    void import("../avisos/avisos.service.js")
-      .then((m) => m.notificarPagoAplicado(pending.id))
-      .catch((e) => console.error("[aviso pago]", (e as Error).message));
+    // Recibo FEL + correo de confirmación (con el DTE y su QR) + aviso en el portal
+    alAplicarPagoEnSegundoPlano(pending.id);
     return { status: "aprobado" as const };
   }
 
@@ -589,7 +587,20 @@ export async function getStudentDashboard(studentId: string) {
   const payments = await prisma.payment.findMany({
     where: { studentId, status: "ACTIVO" },
     orderBy: { paidAt: "desc" },
-    select: { id: true, concept: true, amount: true, discount: true, paidAt: true, method: true },
+    select: {
+      id: true,
+      concept: true,
+      amount: true,
+      discount: true,
+      paidAt: true,
+      method: true,
+      dtes: {
+        where: { status: "CERTIFIED" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { id: true, series: true, number: true, authorizationNumber: true },
+      },
+    },
   });
 
   // Mensualidad del mes en curso: ¿pagada?
@@ -649,9 +660,32 @@ export async function getStudentDashboard(studentId: string) {
       amount: num(p.amount) - num(p.discount),
       paidAt: p.paidAt,
       method: p.method,
+      // Recibo electrónico certificado (para el botón "Descargar recibo FEL")
+      fel: p.dtes[0] ?? null,
     })),
     grades,
   };
+}
+
+// Recibo FEL certificado de un pago del propio alumno (para el PDF).
+export async function getFelReceiptForUser(userId: string, paymentId: string) {
+  const studentId = await requireStudentId(userId);
+  const doc = await prisma.dte.findFirst({
+    where: { paymentId, status: "CERTIFIED", payment: { studentId } },
+    orderBy: { createdAt: "desc" },
+    include: {
+      payment: {
+        select: {
+          concept: true,
+          method: true,
+          paidAt: true,
+          student: { select: { fullName: true, expedienteNumber: true } },
+        },
+      },
+    },
+  });
+  if (!doc) throw notFound("Este pago no tiene recibo electrónico");
+  return doc;
 }
 
 // --- Marco del portal (diseño Readdy) ---------------------------------------

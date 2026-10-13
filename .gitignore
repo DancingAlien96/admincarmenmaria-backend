@@ -4,3 +4,6 @@ dist/
 *.log
 # Solo la carpeta de archivos subidos en la raiz, NO src/modules/uploads/
 /uploads/
+
+# Configuracion local de Claude Code (servidores de vista previa)
+.claude/

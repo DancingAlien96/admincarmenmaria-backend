@@ -68,6 +68,8 @@ model User {
   avisosRecibidos    AvisoDestinatario[]
   avisosCreados      Aviso[]                @relation("AvisoCreatedBy")
   asistenteMensajes  AsistenteMensaje[]
+  issuedDtes         Dte[]                  @relation("DteCreatedBy")
+  voidedDtes         Dte[]                  @relation("DteVoidedBy")
 
   @@index([email])
 }
@@ -205,6 +207,9 @@ model Student {
   // Opcional: los estudiantes creados desde un pago aun no tienen DPI.
   // Sigue siendo unico cuando esta presente (MySQL permite varios NULL).
   dpi              String?       @unique // Identificacion oficial, no repetible
+  // Identificacion fiscal (NIT) para los recibos electronicos (FEL). Sin ella
+  // el recibo se emite a "CF".
+  taxId            String?
   birthDate        DateTime?
   // Direccion
   department       String?
@@ -433,6 +438,9 @@ model Payment {
   charge       Charge?  @relation(fields: [chargeId], references: [id])
   registeredBy User?    @relation("PaymentRegisteredBy", fields: [registeredById], references: [id])
   annulledBy   User?    @relation("PaymentAnnulledBy", fields: [annulledById], references: [id])
+  // Recibos electronicos (FEL) de este pago. Normalmente uno; si se anula
+  // (ej. NIT equivocado) se puede emitir otro, y el anulado queda en el historial.
+  dtes         Dte[]
 
   @@index([studentId])
   @@index([status])
@@ -984,4 +992,151 @@ model AsistenteMensaje {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+// --- FEL: recibos electronicos (RECI) certificados con Digifact ------------
+// Mismos nombres que el modulo DTE de bluestock (dtes, dte_establishments...),
+// con la capitalizacion de este esquema.
+
+enum DteStatus {
+  PENDING // creado, aun no enviado o en proceso
+  CERTIFIED // certificado ante SAT (tiene autorizacion, serie y numero)
+  VOIDED // anulado ante SAT
+  ERROR // la certificacion fallo; se puede reintentar
+}
+
+// Documento Tributario Electronico (DTE) emitido por un pago. Guarda una copia
+// de los datos del emisor y receptor tal como se enviaron, para que el recibo
+// se pueda reimprimir igual aunque cambie la configuracion despues.
+model Dte {
+  id              String    @id @default(cuid())
+  paymentId       String
+  // Establecimiento con el que se emitio (informativo; la copia de abajo manda)
+  establishmentId Int?
+  // Referencia interna unica del intento de emision
+  internalUuid    String    @unique
+  documentType    String    @default("RECI")
+  status          DteStatus @default(PENDING)
+
+  // Emisor (copia de la configuracion al momento de emitir)
+  issuerNit               String
+  issuerName              String
+  issuerCommercialName    String
+  issuerTaxAffiliation    String  @default("GEN")
+  issuerEstablishmentCode String
+  issuerAddress           String
+  issuerPostalCode        String
+  issuerMunicipality      String
+  issuerDepartment        String
+  issuerEmail             String?
+
+  // Receptor
+  receiverTaxId     String // NIT, CUI o "CF"
+  receiverTaxIdType String // NIT | CUI | CF
+  receiverName      String
+  receiverEmail     String?
+  receiverAddress   String?
+
+  // Detalle del recibo (lineas y frases SAT enviadas)
+  items      Json
+  phrases    Json
+  currency   String  @default("GTQ")
+  grandTotal Decimal @db.Decimal(10, 2)
+
+  // Certificacion (respuesta de Digifact / SAT)
+  authorizationNumber String? // UUID de autorizacion
+  series              String?
+  number              String?
+  emittedAt           DateTime?
+  certifiedAt         DateTime?
+  // XML y PDF certificados, guardados en /uploads
+  xmlKey              String?
+  pdfKey              String?
+  payload             Json? // JSON enviado a Digifact; se conserva solo mientras esta en ERROR/PENDING
+  response            Json? // respuesta cruda (sin los archivos base64)
+  error               String?   @db.Text
+
+  // Anulacion
+  voidedAt   DateTime?
+  voidReason String?   @db.Text
+  voidedById String?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  payment       Payment           @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  establishment DteEstablishment? @relation(fields: [establishmentId], references: [id], onDelete: SetNull)
+  createdBy     User?             @relation("DteCreatedBy", fields: [createdById], references: [id])
+  voidedBy      User?             @relation("DteVoidedBy", fields: [voidedById], references: [id])
+
+  @@index([paymentId])
+  @@index([establishmentId])
+  @@index([status])
+  @@index([authorizationNumber])
+  @@index([createdAt])
+}
+
+// Establecimiento registrado en SAT. `sede` lo enlaza con la sede del sistema
+// (Chiquimula / Morales Izabal), a lo sumo un establecimiento por sede; el
+// marcado como isDefault se usa cuando la sede del pago no coincide con ninguno.
+model DteEstablishment {
+  id             Int      @id @default(autoincrement())
+  code           String   @unique // codigo de establecimiento en SAT
+  commercialName String
+  sede           String?  @unique
+  address        String
+  postalCode     String
+  municipality   String
+  department     String
+  isDefault      Boolean  @default(false)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  dtes Dte[]
+
+  @@index([isActive])
+}
+
+// Frases SAT que lleva cada recibo (TipoFrase + CodigoEscenario). `description`
+// explica que significa la frase; es el texto que se imprime en el recibo.
+model DtePhrase {
+  id           Int      @id @default(autoincrement())
+  phraseType   Int
+  scenarioCode Int
+  description  String?  @db.VarChar(255)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([phraseType, scenarioCode])
+}
+
+// Datos fiscales del emisor (una sola fila).
+model DteIssuer {
+  id             Int      @id @default(1)
+  nit            String
+  name           String // nombre o razon social (NombreEmisor)
+  commercialName String
+  taxAffiliation String   @default("GEN") // GEN | PEQ | EXE
+  email          String?
+  updatedAt      DateTime @updatedAt
+}
+
+// Interruptores de la emision (una sola fila).
+model DteSettings {
+  id        Int      @id @default(1)
+  enabled   Boolean  @default(false) // permitir emitir recibos
+  autoIssue Boolean  @default(false) // emitir al aplicar un pago
+  sendEmail Boolean  @default(true) // enviar el recibo al correo del alumno al emitir a mano
+  updatedAt DateTime @updatedAt
+}
+
+// Token de sesion de Digifact (una sola fila). Se renueva al vencer o al 401.
+model DigifactAuth {
+  id        Int       @id @default(1)
+  token     String    @db.Text
+  expiresAt DateTime?
+  updatedAt DateTime  @updatedAt
 }

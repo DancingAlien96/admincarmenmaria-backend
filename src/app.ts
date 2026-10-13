@@ -39,6 +39,8 @@ import { isPushConfigured } from "./lib/push.js";
 import { pushRouter, avisosRouter } from "./modules/avisos/avisos.routes.js";
 import { asistenteRouter } from "./modules/asistente/asistente.routes.js";
 import { isOpenAiConfigured } from "./lib/openai.js";
+import { felRouter } from "./modules/fel/fel.routes.js";
+import { isDigifactConfigured } from "./lib/digifact.js";
 
 export function createApp() {
   const app = express();
@@ -81,6 +83,7 @@ export function createApp() {
       cardEnabled: isRecurrenteConfigured() || isTilopayConfigured(),
       pushEnabled: isPushConfigured(),
       aiEnabled: isOpenAiConfigured(),
+      felEnabled: isDigifactConfigured(),
       cardProvider: isRecurrenteConfigured() ? "recurrente" : isTilopayConfigured() ? "tilopay" : null,
     });
   });
@@ -117,6 +120,7 @@ export function createApp() {
   app.use("/api/push", pushRouter);
   app.use("/api/avisos", avisosRouter);
   app.use("/api/asistente", asistenteRouter);
+  app.use("/api/fel", felRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);
