@@ -60,6 +60,8 @@ jobs:
             upsert_env DIGIFACT_API_URL "${{ secrets.DIGIFACT_API_URL }}"
             upsert_env DIGIFACT_USERNAME "${{ secrets.DIGIFACT_USERNAME }}"
             upsert_env DIGIFACT_PASSWORD "${{ secrets.DIGIFACT_PASSWORD }}"
+            upsert_env DIGIFACT_NAME "${{ secrets.DIGIFACT_NAME }}"
+            upsert_env DIGIFACT_TAX_ID "${{ secrets.DIGIFACT_TAX_ID }}"
             echo "→ Construyendo imagen Docker..."
             docker compose -f docker-compose.prod.yml build
             echo "→ Levantando servicios (mysql + backend)..."
