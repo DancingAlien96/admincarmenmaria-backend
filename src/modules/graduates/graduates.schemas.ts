@@ -15,7 +15,10 @@ export const createGraduateSchema = z.object({
 });
 
 export const updateGraduateSchema = z.object({
-  fullName: z.string().min(3).trim().optional(),
+  fullName: z.string().min(3, "Nombre completo requerido").trim().optional(),
+  // DPI vacío = sin DPI; el número de diploma no puede quedar vacío
+  dpi: z.string().trim().optional().or(z.literal("")),
+  diplomaNumber: z.string().trim().min(1, "El número de diploma es obligatorio").optional(),
   email: z.string().email().trim().optional().or(z.literal("")),
   phone: z.string().trim().optional(),
   mspasCode: z.string().trim().optional(),

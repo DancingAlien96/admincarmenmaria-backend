@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
-import { badRequest, notFound } from "../../lib/http-error.js";
+import { badRequest, conflict, notFound } from "../../lib/http-error.js";
 import { deleteFile } from "../../lib/storage.js";
 import type {
   CreateGraduateInput,
@@ -127,6 +127,20 @@ export async function updateGraduate(id: string, input: UpdateGraduateInput) {
   const existing = await prisma.graduate.findUnique({ where: { id } });
   if (!existing) throw notFound("Egresado no encontrado");
 
+  // DPI y número de diploma son únicos: avisa con claridad si ya los tiene otro
+  const dpi = input.dpi !== undefined ? clean(input.dpi) : undefined;
+  if (dpi && dpi !== existing.dpi) {
+    const otro = await prisma.graduate.findUnique({ where: { dpi } });
+    if (otro) throw conflict(`El DPI ${dpi} ya está registrado para ${otro.fullName}`);
+  }
+  const diplomaNumber = input.diplomaNumber?.trim();
+  if (diplomaNumber && diplomaNumber !== existing.diplomaNumber) {
+    const otro = await prisma.graduate.findUnique({ where: { diplomaNumber } });
+    if (otro) {
+      throw conflict(`El número de diploma ${diplomaNumber} ya pertenece a ${otro.fullName}`);
+    }
+  }
+
   // Si llega un diploma nuevo y ya habia uno distinto, borra el archivo viejo.
   if (
     input.diplomaKey !== undefined &&
@@ -140,6 +154,8 @@ export async function updateGraduate(id: string, input: UpdateGraduateInput) {
     where: { id },
     data: {
       fullName: input.fullName,
+      dpi,
+      diplomaNumber: diplomaNumber || undefined,
       email: input.email !== undefined ? clean(input.email) : undefined,
       phone: input.phone !== undefined ? clean(input.phone) : undefined,
       mspasCode:
