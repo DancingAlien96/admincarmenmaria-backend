@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { billingFields } from "../../lib/facturacion.js";
 
 export const createInviteSchema = z.object({
   studentId: z.string().optional().nullable(),
@@ -41,6 +42,8 @@ export const registerSchema = z.object({
   photoUrl: z.string().trim().optional(),
   photoKey: z.string().trim().optional(),
   guardians: z.array(registerGuardianSchema).optional(),
+  // Datos de facturación (opcional; vacío = recibos a CF con el nombre del alumno)
+  ...billingFields,
 });
 
 export type CreateInviteInput = z.infer<typeof createInviteSchema>;

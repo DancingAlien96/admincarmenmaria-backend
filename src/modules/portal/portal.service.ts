@@ -20,6 +20,7 @@ import {
 import { env } from "../../config/env.js";
 import { REVIEWABLE_PAYMENT, TILOPAY_VERIFY_NOTE } from "../../lib/payment-review.js";
 import { alAplicarPagoEnSegundoPlano } from "../../lib/pago-aplicado.js";
+import { BILLING_SELECT, billingData, type BillingInput } from "../../lib/facturacion.js";
 import {
   isRecurrenteConfigured,
   createCheckout as createRecurrenteCheckout,
@@ -813,4 +814,23 @@ export async function getComprobanteForUser(userId: string, chargeId: string) {
   });
   if (!pay) throw notFound("Esta cuota aún no tiene un pago aprobado");
   return getPaymentForReceipt(pay.id);
+}
+
+// --- Datos de facturación (recibos FEL) del propio alumno --------------------
+
+export async function getFacturacionForUser(userId: string) {
+  const studentId = await requireStudentId(userId);
+  const s = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { ...BILLING_SELECT, fullName: true, email: true },
+  });
+  if (!s) throw notFound("Expediente no encontrado");
+  return s;
+}
+
+// El cambio aplica a los recibos siguientes; los ya emitidos no se modifican.
+export async function updateFacturacionForUser(userId: string, input: BillingInput) {
+  const studentId = await requireStudentId(userId);
+  await prisma.student.update({ where: { id: studentId }, data: billingData(input) });
+  return getFacturacionForUser(userId);
 }

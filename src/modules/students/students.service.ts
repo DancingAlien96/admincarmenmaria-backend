@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
+import { billingData } from "../../lib/facturacion.js";
 import { REVIEWABLE_PAYMENT } from "../../lib/payment-review.js";
 import { notFound, badRequest, conflict } from "../../lib/http-error.js";
 import { deleteFile } from "../../lib/storage.js";
@@ -120,7 +121,7 @@ export async function createStudent(
       status,
       fullName: input.fullName,
       dpi: clean(input.dpi),
-      taxId: clean(input.taxId),
+      ...billingData(input),
       birthDate: input.birthDate,
       // Si no se envía, Prisma usa el default (hoy).
       enrollmentDate: input.enrollmentDate ?? undefined,
@@ -298,7 +299,7 @@ export async function updateStudent(id: string, input: UpdateStudentInput) {
       data: {
         fullName: input.fullName,
         dpi: input.dpi !== undefined ? clean(input.dpi) : undefined,
-        taxId: input.taxId !== undefined ? clean(input.taxId) : undefined,
+        ...billingData(input),
         birthDate: input.birthDate,
         // Editable para corregir la cohorte (null/ausente = sin cambio).
         enrollmentDate: input.enrollmentDate ?? undefined,

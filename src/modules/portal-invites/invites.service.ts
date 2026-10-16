@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { prisma } from "../../lib/prisma.js";
+import { billingData } from "../../lib/facturacion.js";
 import { hashPassword, signToken } from "../../lib/auth.js";
 import { badRequest, notFound, conflict } from "../../lib/http-error.js";
 import { normalizeName } from "../../lib/normalize.js";
@@ -117,6 +118,10 @@ export interface RegisterInput {
   photoUrl?: string;
   photoKey?: string;
   guardians?: RegisterGuardian[];
+  taxId?: string;
+  billingName?: string;
+  billingAddress?: string;
+  billingEmail?: string;
 }
 
 // Arma el nombre completo a partir de las partes (en orden: nombres, apellidos).
@@ -222,6 +227,7 @@ export async function registerFromInvite(token: string, data: RegisterInput) {
         email: data.email,
         photoUrl: data.photoUrl || null,
         photoKey: data.photoKey || null,
+        ...billingData(data),
         // Entra como aspirante: debe pagar y aprobar el examen de admisión
         status: "ASPIRANTE",
         expedienteNumber: expediente,

@@ -25,7 +25,9 @@ import {
 } from "./portal.service.js";
 import { generateReceiptPDF, receiptFileName } from "../../lib/receipt-pdf.js";
 import { generateFelReceiptPDF, felReceiptFileName } from "../../lib/fel-pdf.js";
-import { getFelReceiptForUser } from "./portal.service.js";
+import { getFelReceiptForUser, getFacturacionForUser, updateFacturacionForUser } from "./portal.service.js";
+import { validate } from "../../middleware/validate.js";
+import { billingSchema } from "../../lib/facturacion.js";
 
 export const portalRouter = Router();
 
@@ -115,6 +117,21 @@ portalRouter.get(
       `attachment; filename="${receiptFileName(payment)}"`
     );
     res.send(pdf);
+  })
+);
+
+// Datos de facturación del alumno (a nombre de quién salen sus recibos FEL)
+portalRouter.get(
+  "/facturacion",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ facturacion: await getFacturacionForUser(req.user!.id) });
+  })
+);
+portalRouter.put(
+  "/facturacion",
+  validate({ body: billingSchema }),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ facturacion: await updateFacturacionForUser(req.user!.id, req.body) });
   })
 );
 

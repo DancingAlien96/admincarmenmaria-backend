@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parseTaxId } from "../../lib/nit.js";
+import { billingFields } from "../../lib/facturacion.js";
 
 const STATUS = ["ASPIRANTE", "NO_ADMITIDO", "ACTIVO", "EGRESADO", "BAJA"] as const;
 const DOC_TYPES = [
@@ -31,17 +31,8 @@ export const createStudentSchema = z.object({
   fullName: z.string().min(3, "Nombre completo requerido").trim(),
   // DPI opcional: estudiantes creados desde un pago lo completan despues.
   dpi: z.string().trim().optional().or(z.literal("")),
-  // Identificación fiscal (NIT) para los recibos electrónicos (FEL). Vacío = CF.
-  taxId: z
-    .string()
-    .trim()
-    .max(20)
-    .optional()
-    .or(z.literal(""))
-    .refine((v) => !v || parseTaxId(v)?.tipo === "NIT", {
-      message: "Identificación fiscal inválida (revisa el dígito verificador del NIT)",
-    })
-    .transform((v) => (v ? parseTaxId(v)!.id : v)),
+  // Datos de facturación (FEL): NIT o DPI del titular, nombre, dirección y correo.
+  ...billingFields,
   birthDate: optionalDate,
   // Fecha de inscripcion: define la cohorte/promocion (mora, estadisticas,
   // plan de cuotas por cohorte). Editable para inscripciones adelantadas.

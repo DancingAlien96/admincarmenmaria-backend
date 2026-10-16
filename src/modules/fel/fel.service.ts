@@ -66,6 +66,9 @@ const paymentInclude = {
       id: true,
       fullName: true,
       taxId: true,
+      billingName: true,
+      billingAddress: true,
+      billingEmail: true,
       email: true,
       sede: true,
       address: true,
@@ -105,21 +108,24 @@ export function resolveReceiver(payment: PaymentConFel, input: IssueReceiptInput
   if (!parsed) {
     throw badRequest(`La identificación fiscal "${raw}" no es válida. Corrige la del expediente o emite a CF.`);
   }
+  // Con NIT/DPI, el nombre es el del titular (datos de facturación); en CF se
+  // usa el del titular si lo hay, y si no el del alumno.
   const nombreBase =
     input.receiverName?.trim() ||
+    payment.student?.billingName ||
     payment.student?.fullName ||
     payment.payerName ||
     "CONSUMIDOR FINAL";
   const correo =
     input.receiverEmail !== undefined
       ? input.receiverEmail || null
-      : payment.student?.email ?? payment.payerEmail ?? null;
+      : payment.student?.billingEmail ?? payment.student?.email ?? payment.payerEmail ?? null;
   return {
     taxId: parsed.id,
     taxIdType: parsed.tipo,
     name: nombreBase.slice(0, 200),
     email: correo,
-    address: direccionDe(payment.student),
+    address: payment.student?.billingAddress || direccionDe(payment.student),
   };
 }
 

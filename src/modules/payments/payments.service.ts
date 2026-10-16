@@ -67,7 +67,7 @@ function serialize<T extends WithDecimals>(p: T) {
 }
 
 const include = {
-  student: { select: { id: true, fullName: true, dpi: true, taxId: true } },
+  student: { select: { id: true, fullName: true, dpi: true, taxId: true, billingName: true, billingEmail: true } },
   feeType: { select: { id: true, name: true, category: true } },
   registeredBy: { select: { name: true } },
   annulledBy: { select: { name: true } },

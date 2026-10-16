@@ -207,9 +207,13 @@ model Student {
   // Opcional: los estudiantes creados desde un pago aun no tienen DPI.
   // Sigue siendo unico cuando esta presente (MySQL permite varios NULL).
   dpi              String?       @unique // Identificacion oficial, no repetible
-  // Identificacion fiscal (NIT) para los recibos electronicos (FEL). Sin ella
-  // el recibo se emite a "CF".
+  // Datos de facturacion de los recibos electronicos (FEL). taxId = NIT o CUI
+  // (DPI) del titular; sin el, el recibo se emite a "CF". Nombre, direccion y
+  // correo del titular: si estan vacios se usan los del alumno.
   taxId            String?
+  billingName      String?
+  billingAddress   String?
+  billingEmail     String?
   birthDate        DateTime?
   // Direccion
   department       String?
