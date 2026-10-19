@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
+import multer from "multer";
+import { env } from "../config/env.js";
 import { HttpError } from "../lib/http-error.js";
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -15,6 +17,16 @@ export function errorHandler(
       error: "Datos invalidos",
       details: err.flatten(),
     });
+  }
+
+  // Archivo más grande que el máximo permitido
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res
+        .status(413)
+        .json({ error: `El archivo es muy grande (máximo ${env.MAX_UPLOAD_MB} MB)` });
+    }
+    return res.status(400).json({ error: "No se pudo recibir el archivo" });
   }
 
   if (err instanceof HttpError) {

@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import sharp from "sharp";
+import heicConvert from "heic-convert";
 import { env } from "../config/env.js";
 
 // Carpeta absoluta donde se guardan los archivos subidos.
@@ -12,7 +13,33 @@ export async function ensureUploadDir(): Promise<void> {
   await fs.mkdir(UPLOAD_ROOT, { recursive: true });
 }
 
-const IMAGE_EXT = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff"]);
+const IMAGE_EXT = new Set([
+  ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff", ".tif",
+  ".heic", ".heif", ".avif",
+]);
+
+// Fotos HEIC/HEIF (iPhone y muchos Android): sharp solo lee AVIF, no HEVC.
+// Se detectan por la cabecera del archivo ("ftyp" + marca), no por el nombre.
+const HEVC_BRANDS = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs"]);
+export function isHeic(buffer: Buffer): boolean {
+  if (buffer.length < 16 || buffer.toString("ascii", 4, 8) !== "ftyp") return false;
+  const boxSize = Math.min(buffer.readUInt32BE(0), 64, buffer.length);
+  for (let i = 8; i + 4 <= boxSize; i += 4) {
+    if (HEVC_BRANDS.has(buffer.toString("ascii", i, i + 4))) return true;
+  }
+  return false;
+}
+
+// Convierte HEIC a JPEG para que sharp lo pueda procesar.
+async function decodificarHeic(buffer: Buffer): Promise<Buffer> {
+  return Buffer.from(await heicConvert({ buffer, format: "JPEG", quality: 0.92 }));
+}
+
+// Es imagen por tipo, por extensión o por cabecera HEIC (algunos celulares
+// mandan el archivo sin tipo o como "application/octet-stream").
+export function esImagen(buffer: Buffer, originalName: string, mimetype: string): boolean {
+  return mimetype.startsWith("image/") || IMAGE_EXT.has(safeExt(originalName)) || isHeic(buffer);
+}
 
 function safeExt(originalName: string): string {
   const ext = path.extname(originalName).toLowerCase();
@@ -36,7 +63,7 @@ export async function storeFile(
   await ensureUploadDir();
 
   const ext = safeExt(originalName);
-  const isImage = mimetype.startsWith("image/") || IMAGE_EXT.has(ext);
+  const isImage = esImagen(buffer, originalName, mimetype);
 
   // Nombre unico e impredecible (evita colisiones y enumeracion)
   const id = crypto.randomBytes(16).toString("hex");
@@ -47,7 +74,8 @@ export async function storeFile(
   if (isImage && mimetype !== "image/gif") {
     // Optimiza: limita a 2000px de ancho y recomprime como JPEG de calidad 80.
     // Reduce mucho el peso de fotos de celular sin perder legibilidad.
-    outBuffer = await sharp(buffer)
+    const entrada = isHeic(buffer) ? await decodificarHeic(buffer) : buffer;
+    outBuffer = await sharp(entrada)
       .rotate() // respeta la orientacion EXIF
       .resize({ width: 2000, height: 2000, fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 80, mozjpeg: true })
