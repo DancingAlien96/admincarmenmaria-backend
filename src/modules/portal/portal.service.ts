@@ -1,4 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
+import jwt from "jsonwebtoken";
+import { isMailConfigured, sendBrandedMail } from "../../lib/mailer.js";
 import { notFound, forbidden, badRequest, HttpError } from "../../lib/http-error.js";
 import { normalizeName } from "../../lib/normalize.js";
 import { hashPassword, verifyPassword } from "../../lib/auth.js";
@@ -867,23 +869,75 @@ export async function updateContactoForUser(
   return getCuentaForUser(userId);
 }
 
-// Cambia el correo de acceso (y el del expediente). Pide la contraseña actual.
-export async function changeEmailForUser(userId: string, nuevo: string, password: string) {
-  const studentId = await requireStudentId(userId);
+// Cambio de correo de acceso en dos pasos: (1) el alumno lo pide con su
+// contraseña y le llega un enlace al correo NUEVO; (2) al abrirlo se aplica.
+// Así se comprueba que el correo existe y es suyo. El enlace va firmado con una
+// clave distinta a la de las sesiones (no sirve para iniciar sesión) y vence en 24 h.
+const CORREO_SECRET = () => `${env.JWT_SECRET}:cambio-correo`;
+const escHtml = (t: string) =>
+  t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+export async function requestEmailChangeForUser(userId: string, nuevo: string, password: string) {
+  await requireStudentId(userId);
   const email = nuevo.trim();
   const u = await prisma.user.findUnique({ where: { id: userId } });
   if (!u) throw notFound("Cuenta no encontrada");
   if (!(await verifyPassword(password, u.passwordHash))) {
     throw badRequest("La contraseña actual no es correcta");
   }
-  if (email.toLowerCase() === u.email.toLowerCase()) return getCuentaForUser(userId);
-  const ocupado = await prisma.user.findUnique({ where: { email } });
-  if (ocupado && ocupado.id !== userId) {
-    throw badRequest("Ese correo ya está registrado en otra cuenta");
+  if (email.toLowerCase() === u.email.toLowerCase()) {
+    throw badRequest("Ese ya es tu correo actual");
   }
+  const ocupado = await prisma.user.findUnique({ where: { email } });
+  if (ocupado) throw badRequest("Ese correo ya está registrado en otra cuenta");
+  if (!isMailConfigured()) {
+    throw badRequest("El envío de correos no está disponible. Pide el cambio a la administración.");
+  }
+  const token = jwt.sign({ sub: userId, email, anterior: u.email }, CORREO_SECRET(), { expiresIn: "24h" });
+  const enlace = `${env.FRONTEND_URL}/confirmar-correo/?token=${encodeURIComponent(token)}`;
+  const r = await sendBrandedMail({
+    to: email,
+    subject: "Confirma tu nuevo correo · Campus Carmen María",
+    heading: "Confirma tu correo",
+    bodyHtml: `<p>Hola, ${escHtml(u.name.split(" ")[0])}:</p>
+      <p>Pediste usar este correo para entrar al Campus. Para confirmarlo, abre este enlace (vence en 24 horas):</p>
+      <p style="margin:18px 0;"><a href="${enlace}" style="background:#1e4f8a;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;">Confirmar mi correo</a></p>
+      <p style="color:#6b7280;font-size:13px;">Si no lo pediste tú, ignora este mensaje: tu cuenta no cambia.</p>`,
+    text: `Para confirmar tu nuevo correo del Campus abre este enlace (vence en 24 horas):\n${enlace}\n\nSi no lo pediste, ignora este mensaje.`,
+  });
+  if (!r.sent) throw badRequest("No se pudo enviar el correo de confirmación. Intenta más tarde.");
+  return { pendiente: email };
+}
+
+// Paso 2 (público: el enlace del correo es la prueba). Aplica el cambio.
+export async function confirmEmailChange(token: string) {
+  let datos: { sub: string; email: string; anterior: string };
+  try {
+    datos = jwt.verify(token, CORREO_SECRET()) as typeof datos;
+  } catch {
+    throw badRequest("El enlace no es válido o ya venció. Vuelve a pedir el cambio desde Mi perfil.");
+  }
+  const u = await prisma.user.findUnique({ where: { id: datos.sub } });
+  if (!u || !u.studentId) throw badRequest("El enlace no es válido.");
+  if (u.email.toLowerCase() === datos.email.toLowerCase()) return { email: u.email };
+  // Si el correo cambió por otro lado desde que se pidió, el enlace ya no aplica
+  if (u.email.toLowerCase() !== datos.anterior.toLowerCase()) {
+    throw badRequest("El enlace ya no es válido. Vuelve a pedir el cambio desde Mi perfil.");
+  }
+  const ocupado = await prisma.user.findUnique({ where: { email: datos.email } });
+  if (ocupado && ocupado.id !== u.id) throw badRequest("Ese correo ya está registrado en otra cuenta");
   await prisma.$transaction([
-    prisma.user.update({ where: { id: userId }, data: { email } }),
-    prisma.student.update({ where: { id: studentId }, data: { email } }),
+    prisma.user.update({ where: { id: u.id }, data: { email: datos.email } }),
+    prisma.student.update({ where: { id: u.studentId }, data: { email: datos.email } }),
   ]);
-  return getCuentaForUser(userId);
+  // Aviso al correo anterior (por si no fue el alumno)
+  void sendBrandedMail({
+    to: datos.anterior,
+    subject: "Tu correo del Campus cambió · Carmen María",
+    heading: "Correo actualizado",
+    bodyHtml: `<p>El correo de acceso de tu cuenta del Campus ahora es <strong>${escHtml(datos.email)}</strong>.</p>
+      <p style="color:#6b7280;font-size:13px;">Si no fuiste tú, comunícate de inmediato con la administración de la escuela.</p>`,
+    text: `El correo de acceso de tu cuenta del Campus ahora es ${datos.email}. Si no fuiste tú, comunícate con la escuela.`,
+  }).catch(() => undefined);
+  return { email: datos.email };
 }

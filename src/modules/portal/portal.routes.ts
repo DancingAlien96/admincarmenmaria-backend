@@ -31,7 +31,7 @@ import {
   updateFacturacionForUser,
   getCuentaForUser,
   updateContactoForUser,
-  changeEmailForUser,
+  requestEmailChangeForUser,
 } from "./portal.service.js";
 import { z } from "zod";
 import { validate } from "../../middleware/validate.js";
@@ -157,7 +157,7 @@ portalRouter.put(
     }),
   }),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json({ cuenta: await changeEmailForUser(req.user!.id, req.body.email, req.body.password) });
+    res.json(await requestEmailChangeForUser(req.user!.id, req.body.email, req.body.password));
   })
 );
 
