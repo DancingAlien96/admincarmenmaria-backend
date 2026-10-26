@@ -62,6 +62,17 @@ jobs:
             upsert_env DIGIFACT_PASSWORD "${{ secrets.DIGIFACT_PASSWORD }}"
             upsert_env DIGIFACT_NAME "${{ secrets.DIGIFACT_NAME }}"
             upsert_env DIGIFACT_TAX_ID "${{ secrets.DIGIFACT_TAX_ID }}"
+            echo "→ Ajustando límite de subida de Nginx (55M)..."
+            NGX=/etc/nginx/sites-available/carmenmaria.conf
+            SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo -n"
+            if [ -f "$NGX" ] && ! grep -q "client_max_body_size 55M;" "$NGX"; then
+              if $SUDO cp "$NGX" "$NGX.bak" && $SUDO sed -i 's/client_max_body_size [0-9]*[kKmMgG]\{0,1\};/client_max_body_size 55M;/' "$NGX" && $SUDO nginx -t && $SUDO systemctl reload nginx; then
+                echo "✅ Nginx: client_max_body_size 55M"
+              else
+                echo "⚠️ No se pudo ajustar Nginx (permisos). Restaurando respaldo si existe."
+                [ -f "$NGX.bak" ] && $SUDO cp "$NGX.bak" "$NGX" || true
+              fi
+            fi
             echo "→ Construyendo imagen Docker..."
             docker compose -f docker-compose.prod.yml build
             echo "→ Levantando servicios (mysql + backend)..."

@@ -30,7 +30,7 @@ const envSchema = z.object({
   // URL publica base para construir los enlaces de archivos (ej. https://admin.../api)
   PUBLIC_API_URL: z.string().default("http://localhost:4000"),
   // Tamano maximo de subida en MB
-  MAX_UPLOAD_MB: z.coerce.number().default(15),
+  MAX_UPLOAD_MB: z.coerce.number().default(50),
   // --- WhatsApp (YCloud) ---
   YCLOUD_API_KEY: z.string().optional(),
   YCLOUD_FROM: z.string().optional(), // numero WhatsApp Business en E.164
