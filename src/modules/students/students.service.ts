@@ -585,3 +585,55 @@ export async function mergeStudents(keepId: string, dupId: string) {
     });
   });
 }
+
+// Elimina el expediente COMPLETO (p. ej. una inscripción con datos equivocados,
+// para que la persona se inscriba de nuevo). Irreversible. Reglas:
+//  - Si tiene recibos FEL certificados, no se elimina (son documentos fiscales:
+//    hay que anularlos primero).
+//  - Pagos aprobados y anulados (dinero real / trazabilidad) se conservan sin
+//    vincular; se pueden vincular luego al expediente nuevo.
+//  - Boletas en revisión o rechazadas se borran con sus archivos.
+//  - Se borran cuenta de acceso, links de inscripción, cuotas, documentos,
+//    notas, matrícula, foto y archivos.
+export async function deleteStudentCompletely(studentId: string) {
+  const s = await prisma.student.findUnique({
+    where: { id: studentId },
+    select: { id: true, fullName: true, photoKey: true },
+  });
+  if (!s) throw notFound("Expediente no encontrado");
+
+  const felVigentes = await prisma.dte.count({
+    where: { status: "CERTIFIED", payment: { studentId } },
+  });
+  if (felVigentes > 0) {
+    throw badRequest(
+      `Este expediente tiene ${felVigentes} recibo(s) FEL certificado(s) ante la SAT. Anúlalos antes de eliminarlo.`
+    );
+  }
+
+  const [docs, matriculas, pagos] = await Promise.all([
+    prisma.studentDocument.findMany({ where: { studentId }, select: { fileKey: true } }),
+    prisma.studentMatricula.findMany({ where: { studentId }, select: { fileKey: true } }),
+    prisma.payment.findMany({ where: { studentId }, select: { id: true, status: true, receiptKey: true } }),
+  ]);
+  const pagosBorrar = pagos.filter((p) => p.status === "EN_REVISION" || p.status === "RECHAZADO");
+  const pagosConservados = pagos.length - pagosBorrar.length;
+
+  await prisma.$transaction([
+    prisma.payment.deleteMany({ where: { id: { in: pagosBorrar.map((p) => p.id) } } }),
+    prisma.portalInvite.deleteMany({ where: { studentId } }),
+    prisma.user.deleteMany({ where: { studentId } }),
+    prisma.student.delete({ where: { id: studentId } }),
+  ]);
+
+  // Archivos en disco (si alguno falla, no deshace el borrado)
+  const keys = [
+    s.photoKey,
+    ...docs.map((d) => d.fileKey),
+    ...matriculas.map((m) => m.fileKey),
+    ...pagosBorrar.map((p) => p.receiptKey),
+  ].filter((k): k is string => !!k);
+  await Promise.all(keys.map((k) => deleteFile(k).catch(() => undefined)));
+
+  return { ok: true, nombre: s.fullName, pagosConservados };
+}

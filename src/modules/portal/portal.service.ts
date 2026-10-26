@@ -893,7 +893,14 @@ export async function requestEmailChangeForUser(userId: string, nuevo: string, p
   if (!isMailConfigured()) {
     throw badRequest("El envío de correos no está disponible. Pide el cambio a la administración.");
   }
-  const token = jwt.sign({ sub: userId, email, anterior: u.email }, CORREO_SECRET(), { expiresIn: "24h" });
+  // "v" = versión de la cuenta (última modificación): cualquier cambio posterior
+  // (confirmar este u otro correo, cambiar la contraseña) invalida el enlace,
+  // así que sirve una sola vez.
+  const token = jwt.sign(
+    { sub: userId, email, anterior: u.email, v: u.updatedAt.getTime() },
+    CORREO_SECRET(),
+    { expiresIn: "24h" }
+  );
   const enlace = `${env.FRONTEND_URL}/confirmar-correo/?token=${encodeURIComponent(token)}`;
   const r = await sendBrandedMail({
     to: email,
@@ -911,18 +918,21 @@ export async function requestEmailChangeForUser(userId: string, nuevo: string, p
 
 // Paso 2 (público: el enlace del correo es la prueba). Aplica el cambio.
 export async function confirmEmailChange(token: string) {
-  let datos: { sub: string; email: string; anterior: string };
+  let datos: { sub: string; email: string; anterior: string; v: number };
   try {
     datos = jwt.verify(token, CORREO_SECRET()) as typeof datos;
   } catch {
     throw badRequest("El enlace no es válido o ya venció. Vuelve a pedir el cambio desde Mi perfil.");
   }
   const u = await prisma.user.findUnique({ where: { id: datos.sub } });
-  if (!u || !u.studentId) throw badRequest("El enlace no es válido.");
-  if (u.email.toLowerCase() === datos.email.toLowerCase()) return { email: u.email };
-  // Si el correo cambió por otro lado desde que se pidió, el enlace ya no aplica
-  if (u.email.toLowerCase() !== datos.anterior.toLowerCase()) {
-    throw badRequest("El enlace ya no es válido. Vuelve a pedir el cambio desde Mi perfil.");
+  if (!u || !u.studentId || !u.active) throw badRequest("El enlace no es válido.");
+  // Un solo uso: si la cuenta cambió desde que se pidió (ya se confirmó, cambió
+  // la contraseña o el correo), el enlace ya no aplica.
+  if (
+    u.updatedAt.getTime() !== datos.v ||
+    u.email.toLowerCase() !== datos.anterior.toLowerCase()
+  ) {
+    throw badRequest("Este enlace ya se usó o ya no es válido. Si necesitas cambiar tu correo, pídelo de nuevo desde Mi perfil.");
   }
   const ocupado = await prisma.user.findUnique({ where: { email: datos.email } });
   if (ocupado && ocupado.id !== u.id) throw badRequest("Ese correo ya está registrado en otra cuenta");

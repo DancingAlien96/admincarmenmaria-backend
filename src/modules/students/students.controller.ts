@@ -57,6 +57,10 @@ export async function deleteDocumentController(req: Request, res: Response) {
 }
 
 // Crea la cuenta del portal del estudiante (contraseña por defecto).
+export async function deleteStudentController(req: Request, res: Response) {
+  res.json(await service.deleteStudentCompletely(req.params.id));
+}
+
 export async function portalAccountController(req: Request, res: Response) {
   const result = await service.createPortalAccount(req.params.id);
   res.status(201).json(result);

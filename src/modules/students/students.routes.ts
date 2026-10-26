@@ -2,7 +2,7 @@ import { Router } from "express";
 import { asyncHandler } from "../../lib/async-handler.js";
 import { validate } from "../../middleware/validate.js";
 import { requireAuth } from "../../middleware/require-auth.js";
-import { requireSection } from "../../middleware/authorize.js";
+import { requireAdmin, requireSection } from "../../middleware/authorize.js";
 import {
   createStudentSchema,
   updateStudentSchema,
@@ -28,6 +28,7 @@ import {
   duplicatesController,
   mergeController,
   portalAccountController,
+  deleteStudentController,
 } from "./students.controller.js";
 
 export const studentsRouter = Router();
@@ -81,6 +82,14 @@ studentsRouter.post(
   validate({ params: studentIdParam }),
   asyncHandler(portalAccountController)
 );
+// Eliminar el expediente completo (solo administrador, irreversible)
+studentsRouter.delete(
+  "/:id",
+  requireAdmin,
+  validate({ params: studentIdParam }),
+  asyncHandler(deleteStudentController)
+);
+
 studentsRouter.post(
   "/:id/status",
   canEdit,
