@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import { asyncHandler } from "../../lib/async-handler.js";
 import { validate } from "../../middleware/validate.js";
@@ -24,9 +24,12 @@ export const invitesRouter = Router();
 
 // Subida de la foto del estudiante durante la inscripción (público, pero
 // protegido por el token del link). Solo imágenes.
+// Ruta pública: la foto tiene su propio límite (más bajo que el general) y el
+// link se valida ANTES de recibir el archivo en memoria.
+const FOTO_MAX_MB = Math.min(15, env.MAX_UPLOAD_MB);
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: env.MAX_UPLOAD_MB * 1024 * 1024 },
+  limits: { fileSize: FOTO_MAX_MB * 1024 * 1024, files: 1 },
 });
 // Los teléfonos suben en formatos muy variados (HEIC/HEIF de iPhone, webp,
 // etc.). Aceptamos cualquier imagen y el servidor la convierte a JPEG liviano
@@ -81,9 +84,18 @@ invitesRouter.get(
 // Subir la foto del estudiante (público, protegido por el token).
 invitesRouter.post(
   "/:token/photo",
-  upload.single("file"),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     await assertInviteValid(req.params.token);
+    next();
+  }),
+  (req: Request, res: Response, next: NextFunction) =>
+    upload.single("file")(req, res, (err?: unknown) => {
+      if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+        return next(badRequest(`La foto es muy grande (máximo ${FOTO_MAX_MB} MB)`));
+      }
+      next(err);
+    }),
+  asyncHandler(async (req: Request, res: Response) => {
     if (!req.file) throw badRequest("No se recibió ninguna foto");
     if (!looksLikeImage(req.file.mimetype, req.file.originalname)) {
       throw badRequest("El archivo debe ser una imagen");
