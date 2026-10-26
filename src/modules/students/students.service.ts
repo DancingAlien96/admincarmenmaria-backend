@@ -277,7 +277,24 @@ export async function updateStudent(id: string, input: UpdateStudentInput) {
   const existing = await prisma.student.findUnique({ where: { id } });
   if (!existing) throw notFound("Expediente no encontrado");
 
+  // El correo del expediente es también el de inicio de sesión del portal:
+  // si cambia, se actualiza la cuenta del alumno (si la tiene).
+  const nuevoCorreo = input.email !== undefined ? clean(input.email) : undefined;
+  const cuenta =
+    nuevoCorreo && nuevoCorreo.toLowerCase() !== (existing.email ?? "").toLowerCase()
+      ? await prisma.user.findFirst({ where: { studentId: id } })
+      : null;
+  if (cuenta && nuevoCorreo) {
+    const ocupado = await prisma.user.findUnique({ where: { email: nuevoCorreo } });
+    if (ocupado && ocupado.id !== cuenta.id) {
+      throw conflict(`El correo ${nuevoCorreo} ya lo usa otra cuenta del sistema`);
+    }
+  }
+
   return prisma.$transaction(async (tx) => {
+    if (cuenta && nuevoCorreo) {
+      await tx.user.update({ where: { id: cuenta.id }, data: { email: nuevoCorreo } });
+    }
     // Si se envian responsables, se reemplazan por completo
     if (input.guardians) {
       await tx.guardian.deleteMany({ where: { studentId: id } });
@@ -424,11 +441,23 @@ export async function createPortalAccount(studentId: string) {
   // Si ya tiene cuenta, se reinicia su contraseña por defecto (sirve para
   // corregir credenciales o resetear cuando el alumno la olvida).
   if (existing) {
+    // Si el correo de la cuenta quedó distinto al del expediente (p. ej. se
+    // corrigió un correo mal escrito), se iguala al del expediente.
+    let email = existing.email;
+    if (student.email.toLowerCase() !== existing.email.toLowerCase()) {
+      const ocupado = await prisma.user.findUnique({ where: { email: student.email } });
+      if (ocupado && ocupado.id !== existing.id) {
+        throw conflict(`El correo ${student.email} ya lo usa otra cuenta del sistema`);
+      }
+      email = student.email;
+    }
     await prisma.user.update({
       where: { id: existing.id },
-      data: { passwordHash },
+      data: { passwordHash, email },
     });
-    return { email: existing.email, defaultPassword, reset: true };
+    // Le llegan sus credenciales al correo correcto
+    await sendWelcomeEmail({ to: email, name: student.fullName, password: defaultPassword });
+    return { email, defaultPassword, reset: true };
   }
 
   const emailTaken = await prisma.user.findUnique({ where: { email: student.email } });

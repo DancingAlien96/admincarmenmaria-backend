@@ -25,7 +25,15 @@ import {
 } from "./portal.service.js";
 import { generateReceiptPDF, receiptFileName } from "../../lib/receipt-pdf.js";
 import { generateFelReceiptPDF, felReceiptFileName } from "../../lib/fel-pdf.js";
-import { getFelReceiptForUser, getFacturacionForUser, updateFacturacionForUser } from "./portal.service.js";
+import {
+  getFelReceiptForUser,
+  getFacturacionForUser,
+  updateFacturacionForUser,
+  getCuentaForUser,
+  updateContactoForUser,
+  changeEmailForUser,
+} from "./portal.service.js";
+import { z } from "zod";
 import { validate } from "../../middleware/validate.js";
 import { billingSchema } from "../../lib/facturacion.js";
 
@@ -117,6 +125,39 @@ portalRouter.get(
       `attachment; filename="${receiptFileName(payment)}"`
     );
     res.send(pdf);
+  })
+);
+
+// Mi cuenta: datos de contacto y correo de acceso del propio alumno
+portalRouter.get(
+  "/cuenta",
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ cuenta: await getCuentaForUser(req.user!.id) });
+  })
+);
+portalRouter.put(
+  "/cuenta/contacto",
+  validate({
+    body: z.object({
+      phonePrimary: z.string().trim().max(30).optional(),
+      phoneAlt: z.string().trim().max(30).optional().or(z.literal("")),
+      address: z.string().trim().max(250).optional().or(z.literal("")),
+    }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ cuenta: await updateContactoForUser(req.user!.id, req.body) });
+  })
+);
+portalRouter.put(
+  "/cuenta/correo",
+  validate({
+    body: z.object({
+      email: z.string().trim().email("Correo inválido").max(190),
+      password: z.string().min(1, "Escribe tu contraseña actual"),
+    }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    res.json({ cuenta: await changeEmailForUser(req.user!.id, req.body.email, req.body.password) });
   })
 );
 

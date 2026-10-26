@@ -834,3 +834,56 @@ export async function updateFacturacionForUser(userId: string, input: BillingInp
   await prisma.student.update({ where: { id: studentId }, data: billingData(input) });
   return getFacturacionForUser(userId);
 }
+
+// --- Mi cuenta: datos que el propio alumno puede actualizar ------------------
+
+export async function getCuentaForUser(userId: string) {
+  const studentId = await requireStudentId(userId);
+  const [u, s] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { email: true } }),
+    prisma.student.findUnique({
+      where: { id: studentId },
+      select: { fullName: true, dpi: true, phonePrimary: true, phoneAlt: true, address: true },
+    }),
+  ]);
+  if (!u || !s) throw notFound("Cuenta no encontrada");
+  return { email: u.email, ...s };
+}
+
+// Teléfonos y dirección (nombre y DPI solo los corrige la escuela).
+export async function updateContactoForUser(
+  userId: string,
+  input: { phonePrimary?: string; phoneAlt?: string; address?: string }
+) {
+  const studentId = await requireStudentId(userId);
+  const v = (x?: string) => (x === undefined ? undefined : x.trim() || null);
+  if (input.phonePrimary !== undefined && !input.phonePrimary.trim()) {
+    throw badRequest("El teléfono principal no puede quedar vacío");
+  }
+  await prisma.student.update({
+    where: { id: studentId },
+    data: { phonePrimary: v(input.phonePrimary), phoneAlt: v(input.phoneAlt), address: v(input.address) },
+  });
+  return getCuentaForUser(userId);
+}
+
+// Cambia el correo de acceso (y el del expediente). Pide la contraseña actual.
+export async function changeEmailForUser(userId: string, nuevo: string, password: string) {
+  const studentId = await requireStudentId(userId);
+  const email = nuevo.trim();
+  const u = await prisma.user.findUnique({ where: { id: userId } });
+  if (!u) throw notFound("Cuenta no encontrada");
+  if (!(await verifyPassword(password, u.passwordHash))) {
+    throw badRequest("La contraseña actual no es correcta");
+  }
+  if (email.toLowerCase() === u.email.toLowerCase()) return getCuentaForUser(userId);
+  const ocupado = await prisma.user.findUnique({ where: { email } });
+  if (ocupado && ocupado.id !== userId) {
+    throw badRequest("Ese correo ya está registrado en otra cuenta");
+  }
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { email } }),
+    prisma.student.update({ where: { id: studentId }, data: { email } }),
+  ]);
+  return getCuentaForUser(userId);
+}
