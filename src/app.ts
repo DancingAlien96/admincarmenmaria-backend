@@ -70,8 +70,15 @@ export function createApp() {
     "/uploads",
     express.static(UPLOAD_ROOT, {
       maxAge: "7d",
-      // Evita ejecutar nada; solo servir como adjunto/inline seguro.
-      setHeaders: (res) => res.setHeader("X-Content-Type-Options", "nosniff"),
+      // Evita ejecutar nada: PDF e imágenes se muestran; cualquier otro archivo
+      // (materiales Word, Excel, ZIP...) se descarga y nunca se interpreta aquí.
+      setHeaders: (res, filePath) => {
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        if (!/\.(pdf|jpe?g|png|webp|gif)$/i.test(filePath)) {
+          res.setHeader("Content-Disposition", "attachment");
+          res.setHeader("Content-Security-Policy", "sandbox");
+        }
+      },
     })
   );
 
