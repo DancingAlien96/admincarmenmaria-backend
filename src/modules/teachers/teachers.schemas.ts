@@ -12,6 +12,11 @@ export const createTeacherSchema = z.object({
   collegiate: z.string().trim().optional().or(z.literal("")),
   specialty: z.string().trim().optional().or(z.literal("")),
   notes: z.string().trim().optional().or(z.literal("")),
+  address: z.string().trim().max(250).optional().or(z.literal("")),
+  bankName: z.string().trim().max(100).optional().or(z.literal("")),
+  bankAccountType: z.enum(["MONETARIA", "AHORRO"]).optional().or(z.literal("")),
+  bankAccountNumber: z.string().trim().max(30).optional().or(z.literal("")),
+  bankAccountHolder: z.string().trim().max(150).optional().or(z.literal("")),
   roles: z.array(z.enum(ROLES)).default([]),
 });
 

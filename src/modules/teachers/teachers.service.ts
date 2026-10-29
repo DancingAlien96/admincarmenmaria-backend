@@ -87,6 +87,11 @@ export async function createTeacher(input: CreateTeacherInput, userId?: string) 
       collegiate: clean(input.collegiate),
       specialty: clean(input.specialty),
       notes: clean(input.notes),
+      address: clean(input.address),
+      bankName: clean(input.bankName),
+      bankAccountType: clean(input.bankAccountType),
+      bankAccountNumber: clean(input.bankAccountNumber),
+      bankAccountHolder: clean(input.bankAccountHolder),
       createdById: userId,
       roles: {
         create: (input.roles ?? []).map((role) => ({ role })),
@@ -122,6 +127,14 @@ export async function updateTeacher(id: string, input: UpdateTeacherInput) {
         specialty:
           input.specialty !== undefined ? clean(input.specialty) : undefined,
         notes: input.notes !== undefined ? clean(input.notes) : undefined,
+        address: input.address !== undefined ? clean(input.address) : undefined,
+        bankName: input.bankName !== undefined ? clean(input.bankName) : undefined,
+        bankAccountType:
+          input.bankAccountType !== undefined ? clean(input.bankAccountType) : undefined,
+        bankAccountNumber:
+          input.bankAccountNumber !== undefined ? clean(input.bankAccountNumber) : undefined,
+        bankAccountHolder:
+          input.bankAccountHolder !== undefined ? clean(input.bankAccountHolder) : undefined,
       },
       include: detailInclude,
     });

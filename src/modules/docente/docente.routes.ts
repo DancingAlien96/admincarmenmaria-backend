@@ -5,10 +5,14 @@ import { requireAuth } from "../../middleware/require-auth.js";
 import { requireAdminOrDocente } from "../../middleware/authorize.js";
 import { prisma } from "../../lib/prisma.js";
 import { getStudentFases } from "../grades/grades.service.js";
+import { perfilRouter } from "./perfil.js";
 
 export const docenteRouter = Router();
 
 docenteRouter.use(requireAuth, requireAdminOrDocente);
+
+// Perfil del docente (datos personales, cuenta bancaria y contraseña)
+docenteRouter.use("/perfil", perfilRouter);
 
 // Resumen del docente (para el inicio).
 docenteRouter.get(

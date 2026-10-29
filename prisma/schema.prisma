@@ -68,6 +68,7 @@ model User {
   avisosRecibidos    AvisoDestinatario[]
   avisosCreados      Aviso[]                @relation("AvisoCreatedBy")
   asistenteMensajes  AsistenteMensaje[]
+  perfilDocente      Teacher?               @relation("TeacherUser")
   issuedDtes         Dte[]                  @relation("DteCreatedBy")
   voidedDtes         Dte[]                  @relation("DteVoidedBy")
 
@@ -741,24 +742,33 @@ enum TeacherDocType {
 }
 
 model Teacher {
-  id          String   @id @default(cuid())
-  fullName    String
-  dpi         String?  @unique
-  phone       String?
-  email       String?
+  id                String   @id @default(cuid())
+  fullName          String
+  dpi               String?  @unique
+  phone             String?
+  email             String?
   // Datos profesionales
-  title       String? // titulo / profesion
-  collegiate  String? // numero de colegiado activo
-  specialty   String?
-  notes       String?  @db.Text
-  active      Boolean  @default(true)
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  title             String? // titulo / profesion
+  collegiate        String? // numero de colegiado activo
+  specialty         String?
+  notes             String?  @db.Text
+  address           String?
+  // Cuenta bancaria (para pagos al catedrático); la llena el docente en su perfil
+  bankName          String?
+  bankAccountType   String? // MONETARIA | AHORRO
+  bankAccountNumber String?
+  bankAccountHolder String?
+  // Cuenta de acceso (rol DOCENTE) dueña de este registro
+  userId            String?  @unique
+  active            Boolean  @default(true)
+  createdById       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // Un catedratico puede tener varios roles (tabla pivote: MySQL no soporta enum[])
   roles     TeacherRoleAssignment[]
   documents TeacherDocument[]
+  user      User?                   @relation("TeacherUser", fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([fullName])
 }

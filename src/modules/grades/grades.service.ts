@@ -55,14 +55,11 @@ export async function createGrade(input: CreateGradeInput, userId?: string) {
   });
   if (!student) throw badRequest("El estudiante no existe");
   if (![1, 2, 3].includes(input.fase)) throw badRequest("Fase inválida");
-  const maxScore = input.maxScore ?? 100;
-  if (input.score < 0 || input.score > maxScore) {
-    throw badRequest("La nota debe estar entre 0 y el máximo");
-  }
+  let maxScore = input.maxScore ?? 100;
   if (input.faseItemId) {
     const item = await prisma.faseItem.findUnique({
       where: { id: input.faseItemId },
-      select: { fase: true, active: true, kind: true },
+      select: { fase: true, active: true, kind: true, puntos: true },
     });
     if (!item || !item.active || item.kind === "MATERIAL") {
       throw badRequest("La actividad seleccionada no existe");
@@ -70,6 +67,11 @@ export async function createGrade(input: CreateGradeInput, userId?: string) {
     if (item.fase !== input.fase) {
       throw badRequest("La actividad no pertenece a esa fase");
     }
+    // La nota es sobre los puntos que vale la actividad (los define el admin)
+    if (item.puntos && Number(item.puntos) > 0) maxScore = Number(item.puntos);
+  }
+  if (input.score < 0 || input.score > maxScore) {
+    throw badRequest(`La nota debe estar entre 0 y ${maxScore}`);
   }
   const grade = await prisma.grade.create({
     data: {
