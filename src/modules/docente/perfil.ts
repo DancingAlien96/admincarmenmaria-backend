@@ -5,7 +5,7 @@ import { prisma } from "../../lib/prisma.js";
 import { asyncHandler } from "../../lib/async-handler.js";
 import { validate } from "../../middleware/validate.js";
 import { badRequest, forbidden, notFound } from "../../lib/http-error.js";
-import { changePassword } from "../portal/portal.service.js";
+import { changePassword, requestEmailChangeForUser } from "../portal/portal.service.js";
 
 // Perfil del docente: sus datos personales y su cuenta bancaria. Se guardan en
 // su registro de catedrático (el que ve la administración en Catedráticos).
@@ -154,5 +154,20 @@ perfilRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     await teacherDeUsuario(req.user!.id);
     res.json(await changePassword(req.user!.id, req.body.currentPassword, req.body.newPassword));
+  })
+);
+
+// Cambio de correo de acceso: le llega un enlace al correo nuevo para confirmarlo
+perfilRouter.post(
+  "/correo",
+  validate({
+    body: z.object({
+      email: z.string().trim().email("Correo inválido").max(190),
+      password: z.string().min(1, "Escribe tu contraseña actual"),
+    }),
+  }),
+  asyncHandler(async (req: Request, res: Response) => {
+    await teacherDeUsuario(req.user!.id);
+    res.json(await requestEmailChangeForUser(req.user!.id, req.body.email, req.body.password));
   })
 );

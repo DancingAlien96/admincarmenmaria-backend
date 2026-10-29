@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
-import { notFound } from "../../lib/http-error.js";
+import { conflict, notFound } from "../../lib/http-error.js";
 import { deleteFile } from "../../lib/storage.js";
 import type {
   CreateTeacherInput,
@@ -106,7 +106,35 @@ export async function updateTeacher(id: string, input: UpdateTeacherInput) {
   const existing = await prisma.teacher.findUnique({ where: { id } });
   if (!existing) throw notFound("Catedrático no encontrado");
 
+  // Si el catedrático tiene cuenta de acceso, su correo también es el de inicio
+  // de sesión: al cambiarlo aquí se actualiza la cuenta.
+  const nuevoCorreo = input.email !== undefined ? clean(input.email) : undefined;
+  const cambiaCorreo =
+    !!nuevoCorreo && nuevoCorreo.toLowerCase() !== (existing.email ?? "").toLowerCase();
+  // Cuenta enlazada; si aún no lo está, la cuenta docente con el correo anterior
+  const cuentaId = cambiaCorreo
+    ? existing.userId ??
+      (existing.email
+        ? (
+            await prisma.user.findFirst({
+              where: { email: existing.email, role: "DOCENTE" },
+              select: { id: true },
+            })
+          )?.id ?? null
+        : null)
+    : null;
+  if (cuentaId && nuevoCorreo) {
+    const ocupado = await prisma.user.findUnique({ where: { email: nuevoCorreo } });
+    if (ocupado && ocupado.id !== cuentaId) {
+      throw conflict(`El correo ${nuevoCorreo} ya lo usa otra cuenta del sistema`);
+    }
+  }
+
   return prisma.$transaction(async (tx) => {
+    if (cuentaId && nuevoCorreo) {
+      await tx.user.update({ where: { id: cuentaId }, data: { email: nuevoCorreo } });
+      if (!existing.userId) await tx.teacher.update({ where: { id }, data: { userId: cuentaId } });
+    }
     // Si llegan roles, se reemplazan por completo
     if (input.roles) {
       await tx.teacherRoleAssignment.deleteMany({ where: { teacherId: id } });

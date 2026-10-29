@@ -869,7 +869,7 @@ export async function updateContactoForUser(
   return getCuentaForUser(userId);
 }
 
-// Cambio de correo de acceso en dos pasos: (1) el alumno lo pide con su
+// Cambio de correo de acceso en dos pasos (alumnos y docentes): (1) lo pide con su
 // contraseña y le llega un enlace al correo NUEVO; (2) al abrirlo se aplica.
 // Así se comprueba que el correo existe y es suyo. El enlace va firmado con una
 // clave distinta a la de las sesiones (no sirve para iniciar sesión) y vence en 24 h.
@@ -878,10 +878,12 @@ const escHtml = (t: string) =>
   t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 export async function requestEmailChangeForUser(userId: string, nuevo: string, password: string) {
-  await requireStudentId(userId);
   const email = nuevo.trim();
   const u = await prisma.user.findUnique({ where: { id: userId } });
   if (!u) throw notFound("Cuenta no encontrada");
+  if (!((u.role === "ESTUDIANTE" && u.studentId) || u.role === "DOCENTE")) {
+    throw forbidden("El cambio de correo desde el perfil es para estudiantes y docentes");
+  }
   if (!(await verifyPassword(password, u.passwordHash))) {
     throw badRequest("La contraseña actual no es correcta");
   }
@@ -925,7 +927,9 @@ export async function confirmEmailChange(token: string) {
     throw badRequest("El enlace no es válido o ya venció. Vuelve a pedir el cambio desde Mi perfil.");
   }
   const u = await prisma.user.findUnique({ where: { id: datos.sub } });
-  if (!u || !u.studentId || !u.active) throw badRequest("El enlace no es válido.");
+  if (!u || !u.active || !(u.studentId || u.role === "DOCENTE")) {
+    throw badRequest("El enlace no es válido.");
+  }
   // Un solo uso: si la cuenta cambió desde que se pidió (ya se confirmó, cambió
   // la contraseña o el correo), el enlace ya no aplica.
   if (
@@ -936,9 +940,13 @@ export async function confirmEmailChange(token: string) {
   }
   const ocupado = await prisma.user.findUnique({ where: { email: datos.email } });
   if (ocupado && ocupado.id !== u.id) throw badRequest("Ese correo ya está registrado en otra cuenta");
+  // Se actualiza el correo de acceso y el del expediente / registro de catedrático
   await prisma.$transaction([
     prisma.user.update({ where: { id: u.id }, data: { email: datos.email } }),
-    prisma.student.update({ where: { id: u.studentId }, data: { email: datos.email } }),
+    ...(u.studentId
+      ? [prisma.student.update({ where: { id: u.studentId }, data: { email: datos.email } })]
+      : []),
+    prisma.teacher.updateMany({ where: { userId: u.id }, data: { email: datos.email } }),
   ]);
   // Aviso al correo anterior (por si no fue el alumno)
   void sendBrandedMail({
