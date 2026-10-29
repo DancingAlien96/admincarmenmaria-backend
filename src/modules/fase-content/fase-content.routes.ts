@@ -63,6 +63,26 @@ faseContentRouter.post(
         createdById: req.user?.id,
       },
     });
+    // Aviso a los alumnos: tarea, actividad, examen o material nuevo
+    const QUE: Record<string, string> = {
+      TAREA: "Nueva tarea",
+      ACTIVIDAD: "Nueva actividad",
+      EXAMEN: "Examen programado",
+      MATERIAL: "Nuevo material de clase",
+    };
+    const fechaTxt = item.date
+      ? ` · ${new Intl.DateTimeFormat("es-GT", { day: "numeric", month: "long", timeZone: "UTC" }).format(item.date)}`
+      : "";
+    void import("../avisos/avisos.service.js")
+      .then((m) =>
+        m.notificarAlumnosActivos({
+          tipo: "contenido",
+          titulo: `${QUE[item.kind] ?? "Contenido nuevo"} · Fase ${item.fase}`,
+          mensaje: `${item.title}${fechaTxt}`,
+          url: "/portal/fases/",
+        })
+      )
+      .catch((e) => console.error("[aviso contenido]", (e as Error).message));
     res.status(201).json({ item });
   })
 );

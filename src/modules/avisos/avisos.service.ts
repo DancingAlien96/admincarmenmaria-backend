@@ -2,6 +2,7 @@ import type { Prisma, StudentStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { badRequest, notFound } from "../../lib/http-error.js";
 import { isPushConfigured, sendPushToUsers } from "../../lib/push.js";
+import { formatoAviso, isTelegramConfigured, sendTelegramToUsers } from "../../lib/telegram.js";
 import {
   resolveBulkRecipients,
   sendBulkEmail,
@@ -15,7 +16,14 @@ import { paidByCharge } from "../charges/charges.service.js";
 //  - Manuales: los escribe el admin en el panel (opcionalmente también por correo).
 //  - Automáticos: pago, matrícula, documento recibido, calificación.
 
-export type AvisoTipo = "general" | "pago" | "matricula" | "documento" | "calificacion";
+export type AvisoTipo =
+  | "general"
+  | "pago"
+  | "matricula"
+  | "documento"
+  | "calificacion"
+  | "admision"
+  | "contenido";
 
 // Crea el aviso para esos usuarios y envía el push (sin esperar al envío).
 async function crearAviso(input: {
@@ -49,8 +57,12 @@ async function crearAviso(input: {
   return { aviso, userIds };
 }
 
+// Notificación al celular: push (PWA) y Telegram (a quien lo tenga conectado).
 async function pushAviso(avisoId: string, userIds: string[], titulo: string, mensaje: string, url?: string | null) {
-  const n = await sendPushToUsers(userIds, { title: titulo, body: mensaje, url, tag: avisoId });
+  const [n] = await Promise.all([
+    sendPushToUsers(userIds, { title: titulo, body: mensaje, url, tag: avisoId }),
+    sendTelegramToUsers(userIds, formatoAviso(titulo, mensaje, url)).catch(() => 0),
+  ]);
   if (n) await prisma.aviso.update({ where: { id: avisoId }, data: { pushEnviados: n } });
   return n;
 }
@@ -77,6 +89,28 @@ export async function notificarAlumno(
   }
 }
 
+// Aviso a todos los alumnos activos con cuenta (p. ej. contenido nuevo en una
+// fase). Nunca lanza error.
+export async function notificarAlumnosActivos(aviso: {
+  tipo: AvisoTipo;
+  titulo: string;
+  mensaje: string;
+  url?: string;
+}): Promise<void> {
+  try {
+    const users = await prisma.user.findMany({
+      where: { role: "ESTUDIANTE", active: true, student: { archived: false, status: "ACTIVO" } },
+      select: { id: true },
+    });
+    if (!users.length) return;
+    const ids = users.map((u) => u.id);
+    const { aviso: a } = await crearAviso({ userIds: ids, ...aviso });
+    await pushAviso(a.id, ids, aviso.titulo, aviso.mensaje, aviso.url);
+  } catch (err) {
+    console.error("[aviso alumnos activos]", (err as Error).message);
+  }
+}
+
 function fmtQ(n: number): string {
   return `Q${n.toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
@@ -100,7 +134,7 @@ export async function notificarPagoAplicado(paymentId: string): Promise<void> {
 // 3 y 7 después). Lo ejecuta el cron diario. No se guarda como aviso porque el
 // portal ya muestra las cuotas pendientes en Notificaciones.
 export async function runPushPaymentReminders(): Promise<{ checked: number; sent: number }> {
-  if (!isPushConfigured()) return { checked: 0, sent: 0 };
+  if (!isPushConfigured() && !isTelegramConfigured()) return { checked: 0, sent: 0 };
   const now = new Date();
   const charges = await prisma.charge.findMany({
     where: {
@@ -120,12 +154,17 @@ export async function runPushPaymentReminders(): Promise<{ checked: number; sent
     const d = daysUntil(c.dueDate);
     const titulo = kind === "por_vencer" ? "Cuota por vencer" : "Cuota pendiente";
     const cuando = d === 0 ? "vence hoy" : d > 0 ? `vence en ${d} días` : `venció hace ${-d} días`;
-    sent += await sendPushToUsers([user.id], {
-      title: titulo,
-      body: `${c.concept} · ${fmtQ(saldo)} · ${cuando}`,
-      url: "/portal/pagos/",
-      tag: `cuota-${c.id}`,
-    });
+    const cuerpo = `${c.concept} · ${fmtQ(saldo)} · ${cuando}`;
+    const [push] = await Promise.all([
+      sendPushToUsers([user.id], { title: titulo, body: cuerpo, url: "/portal/pagos/", tag: `cuota-${c.id}` }),
+      // Recordatorio de cobranza por Telegram
+      sendTelegramToUsers(
+        [user.id],
+        formatoAviso(titulo, `${cuerpo}
+Escribe /saldo para ver todas tus cuotas.`, "/portal/pagos/")
+      ).catch(() => 0),
+    ]);
+    sent += push;
   }
   return { checked: charges.length, sent };
 }

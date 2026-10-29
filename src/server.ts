@@ -3,6 +3,7 @@ import { env, isProd } from "./config/env.js";
 import { prisma } from "./lib/prisma.js";
 import { iniciarRecordatoriosDiarios } from "./lib/recordatorios-diarios.js";
 import { closeOrphanedPending } from "./modules/fel/fel.service.js";
+import { configurarTelegram } from "./lib/telegram.js";
 
 async function main() {
   // Verifica conexion a la base de datos antes de escuchar
@@ -15,8 +16,15 @@ async function main() {
     );
   });
 
-  // Recordatorios de cuotas (correo + push) a diario a las 8:00 de Guatemala
+  // Recordatorios de cuotas (correo + push + Telegram) a diario a las 8:00 de Guatemala
   if (isProd) iniciarRecordatoriosDiarios();
+
+  // Bot de Telegram: registra el webhook y los comandos (solo en producción)
+  if (isProd) {
+    void configurarTelegram().catch((e) =>
+      console.error("[telegram] configuración:", (e as Error).message)
+    );
+  }
 
   // Emisiones FEL que quedaron a medias por un reinicio: se marcan con error y aviso.
   void closeOrphanedPending().catch((e) =>

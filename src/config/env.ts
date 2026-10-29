@@ -51,6 +51,8 @@ const envSchema = z.object({
   // Notificaciones push (PWA). Llaves VAPID: npx web-push generate-vapid-keys
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
+  // Bot de Telegram (avisos y recordatorios de cobranza). Vacío = desactivado.
+  TELEGRAM_BOT_TOKEN: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
   // --- FEL (Digifact): recibos electronicos certificados ante SAT ---
   // Pruebas: https://testnucgt.digifact.com/api · Produccion: https://nucgt.digifact.com/gt.com.apinuc/api
   // Vacía = no configurada (docker-compose la pasa como "" si no existe el secreto)

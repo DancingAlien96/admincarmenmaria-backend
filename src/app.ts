@@ -40,6 +40,8 @@ import { pushRouter, avisosRouter } from "./modules/avisos/avisos.routes.js";
 import { asistenteRouter } from "./modules/asistente/asistente.routes.js";
 import { isOpenAiConfigured } from "./lib/openai.js";
 import { felRouter } from "./modules/fel/fel.routes.js";
+import { telegramRouter, telegramWebhookRouter } from "./modules/telegram/telegram.routes.js";
+import { isTelegramConfigured } from "./lib/telegram.js";
 import { isDigifactConfigured } from "./lib/digifact.js";
 
 export function createApp() {
@@ -91,6 +93,7 @@ export function createApp() {
       pushEnabled: isPushConfigured(),
       aiEnabled: isOpenAiConfigured(),
       felEnabled: isDigifactConfigured(),
+      telegramEnabled: isTelegramConfigured(),
       cardProvider: isRecurrenteConfigured() ? "recurrente" : isTilopayConfigured() ? "tilopay" : null,
     });
   });
@@ -128,6 +131,9 @@ export function createApp() {
   app.use("/api/avisos", avisosRouter);
   app.use("/api/asistente", asistenteRouter);
   app.use("/api/fel", felRouter);
+  // Webhook del bot de Telegram (público; se valida con la clave secreta de Telegram)
+  app.use("/api/webhooks/telegram", telegramWebhookRouter);
+  app.use("/api/telegram", telegramRouter);
 
   // 404 + manejo de errores (siempre al final)
   app.use(notFoundHandler);

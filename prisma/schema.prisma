@@ -36,16 +36,21 @@ enum PermissionLevel {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         UserRole @default(STAFF)
-  active       Boolean  @default(true)
+  id                  String    @id @default(cuid())
+  name                String
+  email               String    @unique
+  passwordHash        String
+  role                UserRole  @default(STAFF)
+  active              Boolean   @default(true)
   // Para cuentas de rol ESTUDIANTE: expediente vinculado (portal del alumno).
-  studentId    String?  @unique
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  studentId           String?   @unique
+  // Telegram: chat donde el bot le envía avisos y recordatorios (se enlaza
+  // con un código de un solo uso o compartiendo su número con el bot)
+  telegramChatId      String?   @unique @db.VarChar(32)
+  telegramLinkCode    String?   @unique @db.VarChar(24)
+  telegramLinkExpires DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   student            Student?               @relation("StudentPortalUser", fields: [studentId], references: [id])
   permissions        UserPermission[]

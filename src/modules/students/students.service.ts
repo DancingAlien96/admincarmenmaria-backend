@@ -243,6 +243,20 @@ export async function decideAdmission(
     ).catch(() => undefined);
   }
 
+  // Aviso en el portal + push + Telegram
+  void import("../avisos/avisos.service.js")
+    .then((m) =>
+      m.notificarAlumno(id, {
+        tipo: "admision",
+        titulo: approved ? "¡Fuiste admitido/a!" : "Resultado del examen de admisión",
+        mensaje: approved
+          ? "Aprobaste el examen de admisión. Ya puedes ver tu plan de pagos, tus fases y materiales en el Campus."
+          : "En esta ocasión no fue posible tu ingreso. Comunícate con la escuela para más información.",
+        url: approved ? "/portal/" : undefined,
+      })
+    )
+    .catch((e) => console.error("[aviso admisión]", (e as Error).message));
+
   return { status: toStatus, planCreated, planError };
 }
 
